@@ -1,0 +1,9 @@
+services:
+  iot-api:
+    build: .
+    container_name: iot-api
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+
