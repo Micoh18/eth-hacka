@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { TaskState, TaskData } from "@/types";
-import { Copy, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Copy, CheckCircle2, AlertCircle, Loader2, Lock, Printer, Zap, Smartphone } from "lucide-react";
 
 interface TaskStageProps {
   state: TaskState;
@@ -52,11 +52,11 @@ export function TaskStage({ state, taskData }: TaskStageProps) {
         {state === "quote" && taskData?.paymentDetails && (
           <div className="space-y-4">
             <div className="flex items-start gap-4">
-              <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-2xl">
-                {taskData.device?.type === "smart_lock" && "🔒"}
-                {taskData.device?.type === "printer_3d" && "🖨️"}
-                {taskData.device?.type === "ev_station" && "🔌"}
-                {!taskData.device && "📱"}
+              <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-zinc-400">
+                {taskData.device?.type === "smart_lock" && <Lock size={28} strokeWidth={2} />}
+                {taskData.device?.type === "printer_3d" && <Printer size={28} strokeWidth={2} />}
+                {taskData.device?.type === "ev_station" && <Zap size={28} strokeWidth={2} />}
+                {!taskData.device && <Smartphone size={28} strokeWidth={2} />}
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-white mb-1">

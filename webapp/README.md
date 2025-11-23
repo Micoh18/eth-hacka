@@ -17,15 +17,32 @@ Modern, action-oriented interface for IoT device agents using the x402 payment p
 npm install
 ```
 
-2. Copy environment variables:
+2. Copy environment variables (en el directorio `webapp/`):
 ```bash
-cp .env.local.example .env.local
+cd webapp
+cp env.example .env.local
 ```
 
-3. Configure `.env.local`:
+3. Configure `.env.local` (debe estar en `webapp/.env.local`):
+
+**Variables Requeridas:**
+- **`ANTHROPIC_API_KEY`**: API key de Anthropic para parseo de comandos con LLM
+  - Obtén tu key en: https://console.anthropic.com/
+  - El sistema usa Anthropic por defecto para parseo inteligente
+
+**Variables de Agentes:**
+- **`BUYER_ADDRESS`**: Dirección del agente comprador (cliente)
+- **`BUYER_PRIVATE_KEY`**: Private key del agente comprador
+- **`VENDOR_ADDRESS`**: Dirección del agente vendedor (recibe pagos)
+- **`VENDOR_PRIVATE_KEY`**: Private key del agente vendedor
+
+**Variables Opcionales:**
+- `OPENAI_API_KEY`: Solo si prefieres usar OpenAI en lugar de Anthropic
 - `NEXT_PUBLIC_RPC_URL`: Base Sepolia RPC URL (default: https://sepolia.base.org)
-- `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`: For intent parsing (optional, falls back to regex)
 - `NEXT_PUBLIC_MACHINE_API_URL`: Backend API URL (default: http://localhost:8000)
+- `MAX_AUTO_PAY_AMOUNT`: Máximo de pago automático permitido en ETH (default: 0.05)
+
+**Nota:** Si no configuras `ANTHROPIC_API_KEY`, el sistema usará un parser regex básico como fallback.
 
 4. Start the development server:
 ```bash

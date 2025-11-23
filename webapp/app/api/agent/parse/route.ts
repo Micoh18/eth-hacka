@@ -16,24 +16,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get API key from environment
-    const openaiKey = process.env.OPENAI_API_KEY;
+    // Get API key from environment (Anthropic is preferred)
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
 
     console.log("[API] /api/agent/parse - API keys check:", {
-      hasOpenAI: !!openaiKey,
-      hasAnthropic: !!anthropicKey
+      hasAnthropic: !!anthropicKey,
+      hasOpenAI: !!openaiKey
     });
 
-    if (!openaiKey && !anthropicKey) {
-      console.log("[API] /api/agent/parse - No API keys found, using regex fallback");
-      const result = await parseWithRegex(text);
-      console.log("[API] /api/agent/parse - Regex result:", result);
-      console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
-      return result;
+    // Try Anthropic first (preferred), then OpenAI, then regex fallback
+    if (anthropicKey) {
+      try {
+        console.log("[API] /api/agent/parse - Attempting Anthropic parsing");
+        const result = await parseWithAnthropic(text, anthropicKey);
+        console.log("[API] /api/agent/parse - Anthropic result:", result);
+        console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
+        return result;
+      } catch (error) {
+        console.error("[API] /api/agent/parse - Anthropic parsing failed:", error);
+        // Fallback to OpenAI if available, otherwise regex
+        if (openaiKey) {
+          try {
+            console.log("[API] /api/agent/parse - Falling back to OpenAI");
+            const result = await parseWithOpenAI(text, openaiKey);
+            console.log("[API] /api/agent/parse - OpenAI result:", result);
+            console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
+            return result;
+          } catch (openaiError) {
+            console.error("[API] /api/agent/parse - OpenAI fallback also failed:", openaiError);
+            // Final fallback to regex
+            const result = await parseWithRegex(text);
+            console.log("[API] /api/agent/parse - Using regex fallback");
+            console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
+            return result;
+          }
+        } else {
+          // Fallback to regex
+          const result = await parseWithRegex(text);
+          console.log("[API] /api/agent/parse - Using regex fallback");
+          console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
+          return result;
+        }
+      }
     }
 
-    // Try OpenAI first, then Anthropic
+    // Try OpenAI if Anthropic is not available
     if (openaiKey) {
       try {
         console.log("[API] /api/agent/parse - Attempting OpenAI parsing");
@@ -45,30 +73,16 @@ export async function POST(request: NextRequest) {
         console.error("[API] /api/agent/parse - OpenAI parsing failed:", error);
         // Fallback to regex
         const result = await parseWithRegex(text);
-        console.log("[API] /api/agent/parse - Fallback to regex result:", result);
+        console.log("[API] /api/agent/parse - Using regex fallback");
         console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
         return result;
       }
     }
 
-    if (anthropicKey) {
-      try {
-        console.log("[API] /api/agent/parse - Attempting Anthropic parsing");
-        const result = await parseWithAnthropic(text, anthropicKey);
-        console.log("[API] /api/agent/parse - Anthropic result:", result);
-        console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
-        return result;
-      } catch (error) {
-        console.error("[API] /api/agent/parse - Anthropic parsing failed:", error);
-        // Fallback to regex
-        const result = await parseWithRegex(text);
-        console.log("[API] /api/agent/parse - Fallback to regex result:", result);
-        console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
-        return result;
-      }
-    }
-
+    // No API keys available, use regex fallback
+    console.log("[API] /api/agent/parse - No API keys found, using regex fallback");
     const result = await parseWithRegex(text);
+    console.log("[API] /api/agent/parse - Regex result:", result);
     console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
     return result;
   } catch (error: any) {
@@ -144,10 +158,11 @@ async function parseWithAnthropic(text: string, apiKey: string) {
       body: JSON.stringify({
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 1024,
+        system: "You are an intent parser for an IoT device control system. Parse user commands in natural language and return ONLY valid JSON. The JSON must have this exact structure: { \"action\": string, \"device\": string (optional), \"params\": object (optional) }. Actions can be: unlock, print, charge, etc. Devices are identified by name, ID, or type. Return ONLY the JSON object, no additional text or explanation.",
         messages: [
           {
             role: "user",
-            content: `Parse this IoT command and return JSON: "${text}". Format: { action: string, device?: string, params?: object }`,
+            content: `Parse this IoT device command and return ONLY valid JSON: "${text}"\n\nReturn format: { "action": "unlock" | "print" | "charge", "device": "device-id-or-name" (optional), "params": {} (optional) }`,
           },
         ],
       }),

@@ -8,6 +8,7 @@ import { TaskStage } from "@/components/TaskStage";
 import { Sidebar } from "@/components/Sidebar";
 import { WalletButton } from "@/components/WalletButton";
 import { useTask } from "@/hooks/useTask";
+import { Lock, Printer, Zap } from "lucide-react";
 import {
   discoverMachines,
   discoverMachineCapabilities,
@@ -189,9 +190,9 @@ export default function Home() {
   };
 
   const quickActions = [
-    { icon: "🔓", label: "Desbloquear dispositivo", command: "Desbloquear smart lock" },
-    { icon: "🖨️", label: "Imprimir documento", command: "Imprimir en Lab 3" },
-    { icon: "🔌", label: "Cargar vehículo", command: "Cargar en estación 1" },
+    { icon: Lock, label: "Desbloquear dispositivo", command: "Desbloquear smart lock" },
+    { icon: Printer, label: "Imprimir documento", command: "Imprimir en Lab 3" },
+    { icon: Zap, label: "Cargar vehículo", command: "Cargar en estación 1" },
   ];
 
   return (
@@ -203,13 +204,17 @@ export default function Home() {
         <div className="absolute top-1/4 right-1/4 w-[300px] h-[300px] bg-purple-600/10 rounded-full blur-[100px] opacity-30" />
       </div>
 
+      {/* Wallet Identity Pill - Top Right */}
+      <div className="fixed top-6 right-6 z-50">
+        <WalletButton />
+      </div>
+
       {/* Content */}
       <div className="relative z-10 flex h-screen">
         <Sidebar
           history={history}
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
-          walletButton={<WalletButton />}
         />
 
         <main className="flex-1 flex flex-col lg:ml-20 xl:ml-20">
@@ -218,21 +223,25 @@ export default function Home() {
             {state === "idle" ? (
               <div className="w-full max-w-3xl">
                 {/* Quick Actions */}
-                <div className="flex flex-wrap gap-3 justify-center mb-12">
-                  {quickActions.map((action, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleExecute(action.command)}
-                      disabled={!isConnected}
-                      className="group relative px-4 py-2.5 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl hover:bg-white/10 hover:border-indigo-500/50 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      <span className="text-lg mr-2">{action.icon}</span>
-                      <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
-                        {action.label}
-                      </span>
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-500/10 group-hover:to-purple-500/10 transition-all duration-300" />
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-4 justify-center mb-12">
+                  {quickActions.map((action, idx) => {
+                    const Icon = action.icon;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleExecute(action.command)}
+                        disabled={!isConnected}
+                        className="group flex items-center gap-3 px-5 py-3 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-2xl transition-all duration-300 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <div className="p-2 rounded-lg bg-black/50 text-zinc-400 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 transition-colors">
+                          <Icon size={18} strokeWidth={2} />
+                        </div>
+                        <span className="text-sm font-medium text-zinc-300 group-hover:text-white tracking-wide">
+                          {action.label}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ) : (

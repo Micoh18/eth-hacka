@@ -8,10 +8,9 @@ interface SidebarProps {
   history: TaskHistory[];
   isOpen: boolean;
   onToggle: () => void;
-  walletButton?: React.ReactNode;
 }
 
-export function Sidebar({ history, isOpen, onToggle, walletButton }: SidebarProps) {
+export function Sidebar({ history, isOpen, onToggle }: SidebarProps) {
   return (
     <>
       {/* Overlay */}
@@ -48,13 +47,6 @@ export function Sidebar({ history, isOpen, onToggle, walletButton }: SidebarProp
               />
             </svg>
           </button>
-
-          {/* Wallet Section */}
-          {walletButton && (
-            <div className="mb-6 pb-6 border-b border-white/10">
-              {walletButton}
-            </div>
-          )}
 
           {/* History Section - Icon only */}
           <div className="flex-1 overflow-y-auto">
