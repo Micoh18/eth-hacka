@@ -16,6 +16,12 @@ const nextConfig = {
       '@react-native-async-storage/async-storage': require.resolve('./webpack-stub.js'),
     };
 
+    // Ignore pino-pretty (optional dependency of pino, not needed in browser)
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'pino-pretty': false,
+    };
+
     return config;
   },
 };

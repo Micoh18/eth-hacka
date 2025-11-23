@@ -30,14 +30,13 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="IoT Simulator API", version="1.0.0")
 
 # Configure CORS
+# Allow all origins for development and production flexibility
+# In production, you can restrict this to specific domains
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if os.getenv("CORS_ORIGINS") else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-    ],
+    allow_origins=cors_origins if "*" not in cors_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,9 +67,9 @@ devices: List[DeviceSimulator] = [
 ]
 
 device_map = {d.id: d for d in devices}
-# Map ENS domains to devices for routing
+
 ens_map = {d.ens_domain: d for d in devices}
-# Map device names (from URL path) to devices
+
 device_name_map = {d.id.replace("-", "_"): d for d in devices}  # e.g., "printer_3d_01" -> device
 
 @app.on_event("startup")

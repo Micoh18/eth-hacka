@@ -47,7 +47,8 @@ export interface PaymentDetails {
   token: string;
   recipient: string;
   amount: string;
-  description: string;
+  description?: string;
+  rpcUrl?: string;
 }
 
 export interface Device {

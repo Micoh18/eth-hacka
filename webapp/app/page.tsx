@@ -127,7 +127,7 @@ export default function Home() {
         await publicClient.waitForTransactionReceipt({ hash });
 
         // Retry with payment proof
-        if (taskData.machine && taskData.capability && taskData.device) {
+        if (taskData.machine && taskData.capability && taskData.device && taskData.machine.url) {
           const result = await retryWithPaymentProof(
             taskData.machine.url,
             taskData.capability,
@@ -293,6 +293,10 @@ export default function Home() {
         deviceName: parsedIntent.device,
         action: parsedIntent.action,
       });
+      if (!machine.url) {
+        throw new Error("Machine URL is not available");
+      }
+
       const device = await findDevice(
         machine.url,
         parsedIntent.device,
@@ -504,6 +508,9 @@ export default function Home() {
             
             // Use device name in URL-friendly format for the endpoint
             const deviceNameForUrl = device.id.replace(/-/g, "_");
+            if (!machine.url) {
+              throw new Error("Machine URL is not available for retry");
+            }
             const retryResult = await retryWithPaymentProof(
               machine.url,
               capability,

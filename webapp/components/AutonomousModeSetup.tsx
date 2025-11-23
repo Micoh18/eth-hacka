@@ -26,12 +26,12 @@ export function AutonomousModeSetup({
       const limit = parseFloat(dailyLimit);
       console.log("[AutonomousModeSetup] handleEnable - Daily limit:", limit);
       
-      if (isNaN(limit) || limit <= 0) {
-        console.error("[AutonomousModeSetup] handleEnable - Invalid limit");
-        alert("Por favor ingresa un límite diario válido");
-        setIsEnabling(false);
-        return;
-      }
+            if (isNaN(limit) || limit <= 0) {
+              console.error("[AutonomousModeSetup] handleEnable - Invalid limit");
+              alert("Please enter a valid daily limit");
+              setIsEnabling(false);
+              return;
+            }
 
       // Enable autonomous mode (for ETH, no authorization needed)
       console.log("[AutonomousModeSetup] handleEnable - Calling enableAutonomousMode...");
@@ -52,16 +52,16 @@ export function AutonomousModeSetup({
     } catch (error: any) {
       console.error("[AutonomousModeSetup] handleEnable - Error:", error);
       console.error("[AutonomousModeSetup] handleEnable - Error stack:", error?.stack);
-      alert("Error al activar modo autónomo: " + (error.message || "Error desconocido"));
+      alert("Error activating autonomous mode: " + (error.message || "Unknown error"));
       setIsEnabling(false);
     }
   };
 
 
-  const handleReset = async () => {
-    if (!confirm("¿Estás seguro de que quieres resetear el modo autónomo? Esto eliminará todos los permisos y configuraciones.")) {
-      return;
-    }
+        const handleReset = async () => {
+          if (!confirm("Are you sure you want to reset autonomous mode? This will remove all permissions and configurations.")) {
+            return;
+          }
 
     setIsResetting(true);
     try {
@@ -77,11 +77,11 @@ export function AutonomousModeSetup({
 
       // Reload page to reset state
       window.location.reload();
-    } catch (error: any) {
-      console.error("[AutonomousModeSetup] Failed to reset:", error);
-      alert("Error al resetear: " + error.message);
-      setIsResetting(false);
-    }
+            } catch (error: any) {
+              console.error("[AutonomousModeSetup] Failed to reset:", error);
+              alert("Error resetting: " + error.message);
+              setIsResetting(false);
+            }
   };
 
   return (
@@ -103,48 +103,48 @@ export function AutonomousModeSetup({
             <Shield size={24} className="text-white" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-white">
-              Habilitar Pagos Automáticos
-            </h2>
-            <p className="text-sm text-zinc-400">
-              Activa el modo agente autónomo
-            </p>
+                  <h2 className="text-xl font-semibold text-white">
+                    Enable Automatic Payments
+                  </h2>
+                  <p className="text-sm text-zinc-400">
+                    Activate autonomous agent mode
+                  </p>
           </div>
         </div>
 
         {/* Description */}
         <div className="mb-6 space-y-3">
-          <p className="text-sm text-zinc-300 leading-relaxed">
-            Al activar el modo autónomo, el agente podrá realizar pagos
-            automáticamente sin requerir tu confirmación en cada transacción.
-          </p>
-          <div className="flex items-start gap-2 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
-            <Zap size={16} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-zinc-300">
-              <strong className="text-indigo-400">Límite diario:</strong> Establece
-              un límite máximo de gasto por día. El agente solo pagará si el monto
-              está dentro de este límite.
-            </div>
-          </div>
+                <p className="text-sm text-zinc-300 leading-relaxed">
+                  By activating autonomous mode, the agent will be able to make payments
+                  automatically without requiring your confirmation for each transaction.
+                </p>
+                <div className="flex items-start gap-2 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+                  <Zap size={16} className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-zinc-300">
+                    <strong className="text-indigo-400">Daily limit:</strong> Set
+                    a maximum spending limit per day. The agent will only pay if the amount
+                    is within this limit.
+                  </div>
+                </div>
         </div>
 
         {/* Daily Limit Input */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-zinc-300 mb-2">
-            Límite Diario (ETH)
-          </label>
-          <input
-            type="number"
-            step="0.001"
-            min="0.001"
-            value={dailyLimit}
-            onChange={(e) => setDailyLimit(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all"
-            placeholder="0.1"
-          />
-          <p className="mt-2 text-xs text-zinc-500">
-            Ejemplo: 0.1 ETH = ~$250 USD (aprox.)
-          </p>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Daily Limit (ETH)
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={dailyLimit}
+                  onChange={(e) => setDailyLimit(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all"
+                  placeholder="0.1"
+                />
+                <p className="mt-2 text-xs text-zinc-500">
+                  Example: 0.1 ETH = ~$250 USD (approx.)
+                </p>
         </div>
 
         {/* Actions */}
@@ -155,7 +155,7 @@ export function AutonomousModeSetup({
                 onClick={onClose}
                 className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-zinc-300 hover:text-white transition-colors text-sm font-medium"
               >
-                Cancelar
+                Cancel
               </button>
             )}
             <button
@@ -163,7 +163,7 @@ export function AutonomousModeSetup({
               disabled={Boolean(isEnabling)}
               className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isEnabling ? "Activando..." : "Activar Modo Autónomo"}
+              {isEnabling ? "Activating..." : "Activate Autonomous Mode"}
             </button>
           </div>
         ) : (
@@ -174,10 +174,10 @@ export function AutonomousModeSetup({
               </div>
               <div>
                 <p className="text-sm font-medium text-green-400">
-                  ¡Modo Autónomo Activado!
+                  Autonomous Mode Activated!
                 </p>
                 <p className="text-xs text-green-300/70 mt-1">
-                  El agente puede pagar automáticamente hasta {dailyLimit} ETH por día.
+                  The agent can automatically pay up to {dailyLimit} ETH per day.
                 </p>
               </div>
             </div>
@@ -190,11 +190,11 @@ export function AutonomousModeSetup({
             {config.allowanceGranted ? (
               <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                 <p className="text-xs text-green-400">
-                  ✓ Modo autónomo activo - Límite: {config.dailyLimit} ETH/día
+                  ✓ Autonomous mode active - Limit: {config.dailyLimit} ETH/day
                 </p>
                 {config.agentAddress && (
                   <p className="text-xs text-green-300/70 mt-1">
-                    Agente: {config.agentAddress.slice(0, 6)}...{config.agentAddress.slice(-4)}
+                    Agent: {config.agentAddress.slice(0, 6)}...{config.agentAddress.slice(-4)}
                   </p>
                 )}
               </div>
@@ -202,10 +202,10 @@ export function AutonomousModeSetup({
               <div className="space-y-3">
                 <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                   <p className="text-xs text-yellow-400 mb-2">
-                    ⚠️ Límite configurado, pero falta autorizar al agente
+                    ⚠️ Limit configured, but agent authorization pending
                   </p>
                   <p className="text-xs text-yellow-300/70">
-                    Con ETH nativo, no se requiere autorización de tokens. El modo autónomo está listo para usar.
+                    With native ETH, no token authorization is required. Autonomous mode is ready to use.
                   </p>
                 </div>
               </div>
@@ -216,10 +216,10 @@ export function AutonomousModeSetup({
               onClick={handleReset}
               disabled={Boolean(isResetting)}
               className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-xl text-sm text-red-300 hover:text-red-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Resetear modo autónomo (para testing)"
+              title="Reset autonomous mode (for testing)"
             >
               <RotateCcw size={14} className={isResetting ? "animate-spin" : ""} />
-              {isResetting ? "Reseteando..." : "🛠️ Resetear Modo Autónomo (Debug)"}
+              {isResetting ? "Resetting..." : "🛠️ Reset Autonomous Mode (Debug)"}
             </button>
           </div>
         )}

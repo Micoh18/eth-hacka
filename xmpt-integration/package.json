@@ -1,0 +1,19 @@
+{
+  "name": "xmpt-integration-demo",
+  "version": "1.0.0",
+  "description": "XMTP integration demonstration for ChainMachina IoT system",
+  "main": "example-usage.ts",
+  "scripts": {
+    "demo": "ts-node example-usage.ts"
+  },
+  "dependencies": {
+    "@xmtp/agent-sdk": "^1.1.15",
+    "ethers": "^6.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
+

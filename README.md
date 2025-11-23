@@ -120,5 +120,5 @@ Once everything is running:
 3. The system will discover devices, resolve ENS, and execute actions
 4. If payment is required, you'll see a payment request
 
-Enjoy! 🚀
+Greetings from Juan Carlos! <3
 
