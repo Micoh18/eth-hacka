@@ -49,6 +49,9 @@ export function useTask() {
   const completeTask = useCallback((data?: any) => {
     setState("success");
     if (taskData) {
+      // Update taskData with response data (job_id, job_proof, etc.)
+      setTaskData((prev) => (prev ? { ...prev, data } : null));
+      
       const historyItem: TaskHistory = {
         id: Date.now().toString(),
         intent: taskData.intent,

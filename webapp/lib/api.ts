@@ -28,6 +28,33 @@ export async function getManifest(machineUrl: string) {
   }
 }
 
+export async function getDeviceManifest(machineUrl: string, deviceName: string) {
+  // Convert device name to URL-friendly format (replace hyphens with underscores)
+  const urlFriendlyName = deviceName.replace(/-/g, "_");
+  const url = `/devices/${urlFriendlyName}/ai-manifest`;
+  
+  console.log("[API Client] getDeviceManifest - Calling:", `${machineUrl}${url}`);
+  try {
+    // Use axios directly with full URL since apiClient baseURL might not match machineUrl
+    const response = await axios.get(`${machineUrl}${url}`, {
+      timeout: 30000,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    console.log("[API Client] getDeviceManifest - Success:", response.status);
+    return response.data;
+  } catch (error: any) {
+    console.error("[API Client] getDeviceManifest - Error:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: `${machineUrl}${url}`
+    });
+    throw error;
+  }
+}
+
 export async function getDevices(machineUrl: string) {
   console.log("[API Client] getDevices - Calling:", `${machineUrl}/status`);
   try {

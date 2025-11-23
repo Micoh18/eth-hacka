@@ -48,8 +48,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const url = capability.endpoint.replace(/{device_id}/g, params.device_id || "");
+    // Build URL - handle both device_id and device_name placeholders
+    let url = capability.endpoint;
+    
+    // Replace device_id placeholder
+    if (url.includes("{device_id}")) {
+      url = url.replace(/{device_id}/g, params.device_id || "");
+    }
+    
+    // Replace device_name placeholder (convert to URL-friendly format)
+    if (url.includes("{device_name}")) {
+      const deviceName = params.device_name || params.device_id?.replace(/-/g, "_") || "";
+      url = url.replace(/{device_name}/g, deviceName);
+    }
+    
+    // If endpoint doesn't start with /, it's relative to device path
+    if (!url.startsWith("/")) {
+      const deviceName = params.device_name || params.device_id?.replace(/-/g, "_") || "";
+      url = `/devices/${deviceName}/${url}`;
+    }
+    
     const fullUrl = `${machineUrl}${url}`;
+    
+    console.log("[Agent API] /api/agent/execute - Built URL:", {
+      originalEndpoint: capability.endpoint,
+      builtUrl: url,
+      fullUrl,
+      params
+    });
 
     // If txHash is provided, this is a retry after payment
     if (txHash) {
@@ -76,7 +102,23 @@ export async function POST(request: NextRequest) {
 
         throw new Error(`Unexpected status: ${response.status}`);
       } catch (error: any) {
-        console.error("[Agent API] /api/agent/execute - Retry failed:", error.message);
+        const errorDetails = {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          url: fullUrl,
+          stack: error.stack,
+        };
+        console.error("[Agent API] /api/agent/execute - Retry failed:", errorDetails);
+        
+        // Provide more helpful error message
+        if (error.response?.status === 404) {
+          throw new Error(`Device endpoint not found: ${fullUrl}. Check that the device name and endpoint are correct.`);
+        } else if (error.response?.status === 401) {
+          throw new Error(`Payment verification failed. Transaction hash may be invalid.`);
+        } else if (error.response?.data) {
+          throw new Error(error.response.data.detail || error.response.data.error || error.message);
+        }
         throw error;
       }
     }

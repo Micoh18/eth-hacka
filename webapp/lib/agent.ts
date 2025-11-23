@@ -1,4 +1,5 @@
-import { getManifest, getDevices, executeAction } from "./api";
+import { getManifest, getDevices, executeAction, getDeviceManifest } from "./api";
+import { SellerAgent } from "./seller-agent";
 import type { Machine, Capability, Device, ParsedIntent, PaymentDetails } from "@/types";
 import directoryData from "./directory.json";
 
@@ -9,9 +10,22 @@ export async function discoverMachines(): Promise<Machine[]> {
   return directory as Machine[];
 }
 
+/**
+ * Discover device-specific capabilities
+ * Uses /devices/{device_name}/ai-manifest instead of general /ai-manifest
+ */
 export async function discoverMachineCapabilities(
-  machineUrl: string
+  machineUrl: string,
+  deviceName?: string
 ): Promise<any> {
+  if (deviceName) {
+    // Use device-specific manifest
+    console.log("[Agent] discoverMachineCapabilities - Using device-specific manifest for:", deviceName);
+    return await getDeviceManifest(machineUrl, deviceName);
+  }
+  
+  // Fallback to general manifest if no device name provided
+  console.log("[Agent] discoverMachineCapabilities - Using general manifest (fallback)");
   return await getManifest(machineUrl);
 }
 
@@ -23,38 +37,113 @@ export async function findMatchingCapability(
     unlock: "unlock_device",
     print: "print_document",
     charge: "charge_vehicle",
+    dispense: "dispense_item",
+    capture: "capture_image",
   };
 
-  const capabilityId = actionMap[intent.action] || intent.action;
-  const capability = manifest.capabilities.find(
+  const capabilityId = actionMap[intent.action || ""] || intent.action;
+  
+  console.log("[Agent] findMatchingCapability - Looking for:", {
+    action: intent.action,
+    mappedId: capabilityId,
+    availableCapabilities: manifest.capabilities?.map((c: Capability) => c.id) || [],
+  });
+
+  if (!manifest.capabilities || manifest.capabilities.length === 0) {
+    console.warn("[Agent] findMatchingCapability - No capabilities in manifest");
+    return null;
+  }
+
+  // Try exact match first
+  let capability = manifest.capabilities.find(
     (cap: Capability) => cap.id === capabilityId
   );
 
-  return capability || manifest.capabilities[0] || null;
+  // If not found, try partial match
+  if (!capability && capabilityId) {
+    capability = manifest.capabilities.find(
+      (cap: Capability) => cap.id?.toLowerCase().includes(capabilityId.toLowerCase()) ||
+                          capabilityId.toLowerCase().includes(cap.id?.toLowerCase() || "")
+    );
+  }
+
+  // If still not found, return first capability as fallback
+  if (!capability) {
+    console.warn(
+      `[Agent] findMatchingCapability - Capability "${capabilityId}" not found, using first available:`,
+      manifest.capabilities[0]?.id
+    );
+    return manifest.capabilities[0] || null;
+  }
+
+  console.log("[Agent] findMatchingCapability - Found capability:", capability.id);
+  return capability;
 }
 
 export async function findDevice(
   machineUrl: string,
   deviceId?: string,
-  deviceName?: string
+  deviceName?: string,
+  actionType?: string
 ): Promise<Device | null> {
   const devices = await getDevices(machineUrl);
 
+  // Map action types to device types
+  const actionToDeviceType: Record<string, string> = {
+    print: "3d_printer",
+    unlock: "smart_lock",
+    charge: "ev_charger",
+    dispense: "vending_machine",
+    capture: "security_camera",
+  };
+
+  // If deviceId is provided, search by exact ID
   if (deviceId) {
-    return devices.find((d: Device) => d.id === deviceId) || null;
+    const found = devices.find((d: Device) => d.id === deviceId);
+    if (found) return found;
   }
 
+  // If deviceName is provided, try flexible matching
   if (deviceName) {
-    return (
-      devices.find(
-        (d: Device) =>
-          d.name.toLowerCase().includes(deviceName.toLowerCase()) ||
-          d.id.toLowerCase().includes(deviceName.toLowerCase())
-      ) || null
+    const searchTerm = deviceName.toLowerCase();
+    
+    // Try exact match first
+    let found = devices.find(
+      (d: Device) =>
+        d.name.toLowerCase() === searchTerm ||
+        d.id.toLowerCase() === searchTerm
     );
+    if (found) return found;
+
+    // Try partial match (contains)
+    found = devices.find(
+      (d: Device) =>
+        d.name.toLowerCase().includes(searchTerm) ||
+        d.id.toLowerCase().includes(searchTerm) ||
+        searchTerm.includes(d.name.toLowerCase()) ||
+        searchTerm.includes(d.id.toLowerCase())
+    );
+    if (found) return found;
+
+    // Try word-by-word matching (e.g., "Lab 3" matches "Prusa Lab")
+    const searchWords = searchTerm.split(/\s+/);
+    found = devices.find((d: Device) => {
+      const deviceWords = d.name.toLowerCase().split(/\s+/);
+      return searchWords.some(word => 
+        deviceWords.some(dWord => dWord.includes(word) || word.includes(dWord))
+      );
+    });
+    if (found) return found;
   }
 
-  // Return first device of matching type if available
+  // If actionType is provided, find device by type
+  if (actionType && actionToDeviceType[actionType]) {
+    const targetType = actionToDeviceType[actionType];
+    const found = devices.find((d: Device) => d.type === targetType);
+    if (found) return found;
+  }
+
+  // Return first device as fallback
   return devices[0] || null;
 }
 

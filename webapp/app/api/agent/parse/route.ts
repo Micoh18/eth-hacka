@@ -25,7 +25,27 @@ export async function POST(request: NextRequest) {
       hasOpenAI: !!openaiKey
     });
 
-    // Try Anthropic first (preferred), then OpenAI, then regex fallback
+    // Step 1: Try regex first (fast and cheap)
+    console.log("[API] /api/agent/parse - Step 1: Attempting regex parsing");
+    const regexData = parseWithRegex(text);
+    
+    console.log("[API] /api/agent/parse - Regex result:", regexData);
+    
+    // Check if regex understood the message (high confidence or clear action)
+    const regexUnderstood = 
+      regexData.confidence && regexData.confidence >= 0.8 || // High confidence
+      (regexData.type === "action" && regexData.action); // Clear action detected
+    
+    if (regexUnderstood) {
+      console.log("[API] /api/agent/parse - Regex understood the message, using regex result");
+      console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
+      return NextResponse.json(regexData);
+    }
+
+    // Step 2: Regex didn't understand, try with AI
+    console.log("[API] /api/agent/parse - Regex didn't understand, falling back to AI");
+    
+    // Try Anthropic first (preferred), then OpenAI
     if (anthropicKey) {
       try {
         console.log("[API] /api/agent/parse - Attempting Anthropic parsing");
@@ -35,7 +55,7 @@ export async function POST(request: NextRequest) {
         return result;
       } catch (error) {
         console.error("[API] /api/agent/parse - Anthropic parsing failed:", error);
-        // Fallback to OpenAI if available, otherwise regex
+        // Fallback to OpenAI if available
         if (openaiKey) {
           try {
             console.log("[API] /api/agent/parse - Falling back to OpenAI");
@@ -45,18 +65,16 @@ export async function POST(request: NextRequest) {
             return result;
           } catch (openaiError) {
             console.error("[API] /api/agent/parse - OpenAI fallback also failed:", openaiError);
-            // Final fallback to regex
-            const result = await parseWithRegex(text);
-            console.log("[API] /api/agent/parse - Using regex fallback");
+            // Return regex result as final fallback
+            console.log("[API] /api/agent/parse - All AI parsing failed, using regex result");
             console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
-            return result;
+            return NextResponse.json(regexData);
           }
         } else {
-          // Fallback to regex
-          const result = await parseWithRegex(text);
-          console.log("[API] /api/agent/parse - Using regex fallback");
+          // No OpenAI key, return regex result
+          console.log("[API] /api/agent/parse - No OpenAI key, using regex result");
           console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
-          return result;
+          return NextResponse.json(regexData);
         }
       }
     }
@@ -71,20 +89,17 @@ export async function POST(request: NextRequest) {
         return result;
       } catch (error) {
         console.error("[API] /api/agent/parse - OpenAI parsing failed:", error);
-        // Fallback to regex
-        const result = await parseWithRegex(text);
-        console.log("[API] /api/agent/parse - Using regex fallback");
+        // Return regex result as fallback
+        console.log("[API] /api/agent/parse - OpenAI failed, using regex result");
         console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
-        return result;
+        return NextResponse.json(regexData);
       }
     }
 
-    // No API keys available, use regex fallback
-    console.log("[API] /api/agent/parse - No API keys found, using regex fallback");
-    const result = await parseWithRegex(text);
-    console.log("[API] /api/agent/parse - Regex result:", result);
+    // No API keys available, use regex result
+    console.log("[API] /api/agent/parse - No API keys found, using regex result");
     console.log(`[API] /api/agent/parse - Request completed in ${Date.now() - startTime}ms`);
-    return result;
+    return NextResponse.json(regexData);
   } catch (error: any) {
     console.error("[API] /api/agent/parse - Parse error:", {
       error: error.message,
@@ -190,54 +205,81 @@ async function parseWithAnthropic(text: string, apiKey: string) {
 
 function parseWithRegex(text: string) {
   console.log("[API] parseWithRegex - Parsing with regex");
-  const lowerText = text.toLowerCase();
+  const lowerText = text.toLowerCase().trim();
 
-  // Check if it's a conversational message (greetings, questions, etc.)
-  const isConversation = 
-    lowerText.match(/^(hola|hi|hello|hey|buenos|buenas|gracias|thanks|thank you|por favor|please)/i) ||
-    lowerText.match(/\?$/) ||
-    lowerText.match(/(qué|que|what|how|cuál|which|dónde|where|cuándo|when|quién|who|por qué|why)/i) ||
-    (!lowerText.includes("unlock") && !lowerText.includes("desbloquear") && 
-     !lowerText.includes("print") && !lowerText.includes("imprimir") && 
-     !lowerText.includes("charge") && !lowerText.includes("cargar"));
+  // Check if it's a clear conversational message (greetings, questions, etc.)
+  const isClearConversation = 
+    lowerText.match(/^(hola|hi|hello|hey|buenos|buenas|gracias|thanks|thank you|por favor|please)$/i) ||
+    (lowerText.match(/\?$/) && lowerText.length < 50) || // Short questions
+    lowerText.match(/^(qué|que|what|how|cuál|which|dónde|where|cuándo|when|quién|who|por qué|why)\s/i);
 
-  if (isConversation) {
+  if (isClearConversation) {
     const result = {
       type: "chat" as const,
       message: "Hola! Puedo ayudarte a ejecutar acciones en dispositivos IoT. Por ejemplo, puedes decirme 'Desbloquear smart lock', 'Imprimir en Lab 3', o 'Cargar en estación 1'. ¿En qué puedo ayudarte?",
+      confidence: 0.9, // High confidence for clear conversations
     };
-    console.log("[API] parseWithRegex - Detected conversation, result:", result);
-    return NextResponse.json(result);
+    console.log("[API] parseWithRegex - Detected clear conversation, result:", result);
+    return result; // Return object, not NextResponse
   }
 
   // Simple regex-based parsing for actions
-  let action = "unlock";
+  let action: string | undefined;
   let device: string | undefined;
+  let confidence = 0.5; // Low confidence by default
 
-  if (lowerText.includes("unlock") || lowerText.includes("desbloquear")) {
-    action = "unlock";
-  } else if (lowerText.includes("print") || lowerText.includes("imprimir")) {
-    action = "print";
-  } else if (lowerText.includes("charge") || lowerText.includes("cargar")) {
-    action = "charge";
+  // Check for action keywords with high confidence patterns
+  const actionPatterns = [
+    { keywords: ["unlock", "desbloquear", "abrir"], action: "unlock", confidence: 0.9 },
+    { keywords: ["print", "imprimir"], action: "print", confidence: 0.9 },
+    { keywords: ["charge", "cargar"], action: "charge", confidence: 0.9 },
+    { keywords: ["dispense", "dispensar"], action: "dispense", confidence: 0.9 },
+    { keywords: ["capture", "capturar"], action: "capture", confidence: 0.9 },
+  ];
+
+  for (const pattern of actionPatterns) {
+    if (pattern.keywords.some(keyword => lowerText.includes(keyword))) {
+      action = pattern.action;
+      confidence = pattern.confidence;
+      break;
+    }
   }
 
-  // Try to extract device ID or name
-  const deviceMatch = text.match(
-    /(?:device|dispositivo|lock|impresora|printer|estaci[oó]n)\s+([a-z0-9-]+)/i
-  );
-  if (deviceMatch) {
-    device = deviceMatch[1];
+  // If no clear action found, low confidence
+  if (!action) {
+    const result = {
+      type: "chat" as const,
+      message: "No entendí tu mensaje. ¿Podrías ser más específico? Por ejemplo: 'Desbloquear smart lock', 'Imprimir documento', o 'Cargar vehículo'.",
+      confidence: 0.3, // Low confidence - should trigger AI parsing
+    };
+    console.log("[API] parseWithRegex - No clear action detected, low confidence, result:", result);
+    return result; // Return object, not NextResponse
+  }
+
+  // Try to extract device ID or name with better patterns
+  const devicePatterns = [
+    /(?:en|in|on|at)\s+([a-z0-9\s-]+?)(?:\s|$|,|\.)/i, // "en Lab 3", "in station 1"
+    /(?:device|dispositivo|lock|impresora|printer|estaci[oó]n|lab|station)\s+([a-z0-9-]+)/i,
+    /(?:smart\s+lock|3d\s+printer|ev\s+charger|vending\s+machine)/i,
+  ];
+
+  for (const pattern of devicePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      device = match[1].trim();
+      confidence = Math.min(confidence + 0.1, 0.95); // Boost confidence if device found
+      break;
+    }
   }
 
   const result = {
     type: "action" as const,
     action,
     device,
-    confidence: 0.7,
+    confidence,
   };
   
   console.log("[API] parseWithRegex - Detected action, result:", result);
-  return NextResponse.json(result);
+  return result; // Return object, not NextResponse
 }
 

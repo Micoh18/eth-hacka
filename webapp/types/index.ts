@@ -69,6 +69,14 @@ export interface TaskData {
   paymentDetails?: PaymentDetails;
   txHash?: string;
   error?: string;
+  data?: {
+    job_id?: string;
+    job_proof?: string;
+    file_name?: string;
+    transaction_hash?: string;
+    message?: string;
+    [key: string]: any;
+  };
 }
 
 export interface TaskHistory {

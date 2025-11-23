@@ -4,6 +4,8 @@ from typing import List, Optional, Dict, Any
 import asyncio
 import os
 import logging
+import uuid
+import hashlib
 from datetime import datetime
 from models import (
     DeviceSimulator,
@@ -570,13 +572,46 @@ async def execute_device_job(
         logger.info(f"[API] POST /devices/{device_name}/job - Payment verified, executing action: {action}")
         
         # Device-specific action execution
+        result_data = {
+            "success": True,
+            "message": f"Action '{action}' executed on {device.name} successfully",
+            "transaction_hash": tx_hash,
+            "device_status": device.get_detail()
+        }
+        
         if device.type == "smart_lock" and hasattr(device, 'is_locked'):
             device.is_locked = False
             if hasattr(device, 'last_unlocked_by'):
                 device.last_unlocked_by = tx_hash[:10] + "..."
         elif device.type == "3d_printer":
-            # Simulate printing
+            # Simulate printing with proof
             logger.info(f"[API] POST /devices/{device_name}/job - Starting print job")
+            
+            # Generate unique job ID and proof
+            job_id = str(uuid.uuid4())
+            job_proof = hashlib.sha256(f"{job_id}{tx_hash}{device.id}".encode()).hexdigest()[:16]
+            
+            # Generate filename
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            filename = f"print_job_{timestamp}_{job_proof}.gcode"
+            
+            # Update printer state
+            if hasattr(device, 'status'):
+                device.status = "PRINTING"
+            if hasattr(device, 'current_file'):
+                device.current_file = filename
+            if hasattr(device, 'progress_percent'):
+                device.progress_percent = 0.0  # Start at 0%
+            
+            # Add print job proof to response
+            result_data.update({
+                "job_id": job_id,
+                "job_proof": job_proof,
+                "file_name": filename,
+                "message": f"Print job '{filename}' started successfully on {device.name}"
+            })
+            
+            logger.info(f"[API] POST /devices/{device_name}/job - Print job created: {job_id} ({filename})")
         elif device.type == "ev_charger":
             # Simulate charging start
             if hasattr(device, 'status'):
@@ -586,12 +621,7 @@ async def execute_device_job(
         device.update()
         
         logger.info(f"[API] POST /devices/{device_name}/job - Action executed successfully")
-        return {
-            "success": True,
-            "message": f"Action '{action}' executed on {device.name} successfully",
-            "transaction_hash": tx_hash,
-            "device_status": device.get_detail()
-        }
+        return result_data
     except Exception as e:
         logger.error(f"[API] POST /devices/{device_name}/job - Exception: {str(e)}")
         raise HTTPException(

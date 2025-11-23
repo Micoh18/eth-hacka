@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useWalletClient, usePublicClient } from "wagmi";
+import { useAccount, useWalletClient, usePublicClient, useConnectorClient } from "wagmi";
 import { parseEther } from "viem";
+import { baseSepolia } from "@/lib/wallet";
 import { CommandInput } from "@/components/CommandInput";
 import { TaskStage } from "@/components/TaskStage";
 import { AgentMessage } from "@/components/AgentMessage";
 import { Sidebar } from "@/components/Sidebar";
 import { WalletButton } from "@/components/WalletButton";
+import { AutonomousModeSetup } from "@/components/AutonomousModeSetup";
 import { useTask } from "@/hooks/useTask";
+import { useAutonomousMode } from "@/hooks/useAutonomousMode";
+import { executeAgentPayment, getAgentAddress } from "@/lib/agent-payment";
 import { Lock, Printer, Zap } from "lucide-react";
 import {
   discoverMachines,
@@ -22,9 +26,25 @@ import type { Machine } from "@/types";
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { address, isConnected } = useAccount();
+  const [showAutonomousSetup, setShowAutonomousSetup] = useState(false);
+  const [needsAutonomousSetup, setNeedsAutonomousSetup] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const { address, isConnected, connector } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { data: connectorClient } = useConnectorClient();
   const publicClient = usePublicClient();
+  const {
+    config: autonomousConfig,
+    canPayAutonomously,
+    recordPayment,
+    getSpendPermission,
+    isLoading: autonomousLoading,
+  } = useAutonomousMode();
+
+  // Prevent hydration mismatch by only rendering client-side dependent UI after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const {
     state,
     taskData,
@@ -48,20 +68,97 @@ export default function Home() {
   // Listen for authorize payment event
   useEffect(() => {
     const handleAuthorize = async () => {
-      if (!taskData?.paymentDetails || !walletClient || !publicClient) {
-        setError("Wallet not connected");
+      if (!taskData?.paymentDetails) {
+        setError("No payment details available");
+        return;
+      }
+
+      if (!walletClient || !publicClient) {
+        if (!autonomousConfig.enabled) {
+          setNeedsAutonomousSetup(true);
+          setShowAutonomousSetup(true);
+          setError("Wallet not ready. Please enable autonomous mode.");
+        } else {
+          setError("Wallet not connected");
+        }
         return;
       }
 
       try {
         startExecution();
         const amount = parseEther(taskData.paymentDetails.amount);
+        const amountEth = parseFloat(taskData.paymentDetails.amount);
 
-        // Send transaction
-        const hash = await walletClient.sendTransaction({
-          to: taskData.paymentDetails.recipient as `0x${string}`,
-          value: amount,
-        });
+        // Check autonomous mode limits if enabled
+        if (autonomousConfig.enabled && !canPayAutonomously(amountEth)) {
+          setError(
+            `Payment amount (${amountEth.toFixed(4)} ETH) exceeds daily limit (${autonomousConfig.dailyLimit} ETH)`
+          );
+          return;
+        }
+
+        let hash: `0x${string}`;
+
+        // If autonomous mode is enabled, use Coinbase Smart Wallet Session Keys
+        if (autonomousConfig.enabled && autonomousConfig.spendPermission && connector) {
+          const permissionContext = getSpendPermission();
+          if (!permissionContext) {
+            setError("Spend permission not found. Please re-enable autonomous mode.");
+            return;
+          }
+
+          // Get provider from connector
+          const provider = await connector.getProvider();
+          if (!provider) {
+            setError("Provider not available");
+            return;
+          }
+
+          // Use wallet_sendCalls with capabilities (Session Keys)
+          const amountHex = `0x${amount.toString(16)}`;
+          const chainId = `0x${baseSepolia.id.toString(16)}`; // Base Sepolia: 0x14a34
+
+          const txId = await provider.request({
+            method: "wallet_sendCalls",
+            params: [
+              {
+                chainId: chainId,
+                calls: [
+                  {
+                    to: taskData.paymentDetails.recipient,
+                    value: amountHex,
+                    data: "0x",
+                  },
+                ],
+                capabilities: {
+                  permissions: permissionContext, // Use the stored permission context
+                },
+              },
+            ],
+          });
+
+          hash = txId as `0x${string}`;
+          recordPayment(amountEth);
+        } else {
+          // Fallback to regular transaction
+          if (!walletClient) {
+            setError("Wallet not ready");
+            return;
+          }
+
+          // Agent sends ETH from its own wallet (autonomous - no user signature needed)
+          const amountETHStr = (Number(amount) / 1e18).toFixed(6);
+          hash = await executeAgentPayment(
+            address as `0x${string}`, // User's wallet address (for logging)
+            taskData.paymentDetails.recipient as `0x${string}`, // Machine address
+            amountETHStr // Amount in ETH
+          );
+
+          // Record payment if autonomous mode is enabled (shouldn't happen here, but just in case)
+          if (autonomousConfig.enabled) {
+            recordPayment(amountEth);
+          }
+        }
 
         setTxHash(hash);
 
@@ -79,6 +176,7 @@ export default function Home() {
           completeTask(result);
         }
       } catch (error: any) {
+        console.error("[Page] handleAuthorize - Error:", error);
         setError(error.message || "Payment failed");
       }
     };
@@ -89,7 +187,18 @@ export default function Home() {
         window.removeEventListener("authorize-payment", handleAuthorize as EventListener);
       };
     }
-  }, [taskData, walletClient, publicClient, startExecution, setTxHash, completeTask, setError]);
+  }, [
+    taskData,
+    walletClient,
+    publicClient,
+    startExecution,
+    setTxHash,
+    completeTask,
+    setError,
+    autonomousConfig,
+    canPayAutonomously,
+    recordPayment,
+  ]);
 
   const handleExecute = async (command: string) => {
     // Clear chat message when starting new command
@@ -146,9 +255,32 @@ export default function Home() {
       console.log("[Page] handleExecute - Using machine:", machine.url);
       setMachine(machine);
 
-      // Step 3: Discover capabilities
-      console.log("[Page] handleExecute - Step 3: Discovering capabilities");
-      const manifest = await discoverMachineCapabilities(machine.url);
+      // Step 3: Find device FIRST (needed for device-specific manifest)
+      console.log("[Page] handleExecute - Step 3: Finding device");
+      console.log("[Page] handleExecute - Searching with:", {
+        deviceId: parsedIntent.device,
+        deviceName: parsedIntent.device,
+        action: parsedIntent.action,
+      });
+      const device = await findDevice(
+        machine.url,
+        parsedIntent.device,
+        parsedIntent.device,
+        parsedIntent.action
+      );
+      console.log("[Page] handleExecute - Found device:", device);
+      if (!device) {
+        throw new Error(
+          `Device not found. Searched for: "${parsedIntent.device}" with action: "${parsedIntent.action}". ` +
+          `Available devices: Check the API at ${machine.url}/status`
+        );
+      }
+      setDevice(device);
+
+      // Step 4: Discover device-specific capabilities
+      console.log("[Page] handleExecute - Step 4: Discovering device-specific capabilities");
+      const deviceNameForUrl = device.id.replace(/-/g, "_"); // Convert to URL-friendly format
+      const manifest = await discoverMachineCapabilities(machine.url, deviceNameForUrl);
       console.log("[Page] handleExecute - Manifest received:", manifest);
       const capability = await findMatchingCapability(manifest, parsedIntent);
       console.log("[Page] handleExecute - Matching capability:", capability);
@@ -157,21 +289,15 @@ export default function Home() {
       }
       setCapability(capability);
 
-      // Step 4: Find device
-      console.log("[Page] handleExecute - Step 4: Finding device");
-      const device = await findDevice(
-        machine.url,
-        parsedIntent.device,
-        parsedIntent.device
-      );
-      console.log("[Page] handleExecute - Found device:", device);
-      if (!device) {
-        throw new Error("Device not found");
-      }
-      setDevice(device);
-
       // Step 5: Execute with payment
       if (!walletClient || !publicClient) {
+        // Check if autonomous mode is needed
+        if (!autonomousConfig.enabled) {
+          setNeedsAutonomousSetup(true);
+          setShowAutonomousSetup(true);
+          setError("Wallet not ready. Please enable autonomous mode to continue.");
+          return;
+        }
         throw new Error("Wallet not ready");
       }
 
@@ -180,10 +306,43 @@ export default function Home() {
         capability,
         { device_id: device.id },
         async (to, value) => {
-          const hash = await walletClient.sendTransaction({
-            to: to as `0x${string}`,
-            value,
+          // Check if autonomous mode is enabled (for ETH, no allowance needed)
+          if (!autonomousConfig.enabled) {
+            throw new Error("Autonomous mode not enabled");
+          }
+
+          // Convert value to ETH amount
+          const amountEth = Number(value) / 1e18;
+          const amountETHStr = amountEth.toFixed(6); // 6 decimal places for ETH
+
+          // Check if payment can be made autonomously
+          if (!canPayAutonomously(amountEth)) {
+            throw new Error(
+              `Payment amount (${amountEth.toFixed(6)} ETH) exceeds daily limit (${autonomousConfig.dailyLimit} ETH) or would exceed it.`
+            );
+          }
+
+          // Get user's wallet address
+          if (!address) {
+            throw new Error("User wallet not connected");
+          }
+
+          console.log("[Page] Executing agent payment:", {
+            userAddress: address,
+            machineAddress: to,
+            amountETH: amountETHStr,
           });
+
+          // Agent sends ETH from its own wallet (autonomous - no user signature needed)
+          const hash = await executeAgentPayment(
+            address as `0x${string}`, // User's wallet address (for logging/verification)
+            to as `0x${string}`,      // Machine address (recipient)
+            amountETHStr              // Amount in ETH
+          );
+
+          // Record payment in ETH equivalent
+          recordPayment(amountEth);
+
           return hash;
         },
         async (hash) => {
@@ -194,7 +353,88 @@ export default function Home() {
       if (result.success) {
         completeTask(result.data);
       } else if (result.paymentDetails) {
-        showQuote(result.paymentDetails);
+        // Payment amount is already in ETH
+        const amountEth = parseFloat(result.paymentDetails.amount);
+        
+        // Check if we can pay autonomously
+        if (autonomousConfig.enabled && autonomousConfig.allowanceGranted && canPayAutonomously(amountEth)) {
+          // AUTO-PAY: Execute payment automatically without showing modal
+          console.log("[Page] Auto-paying - Autonomous mode enabled, executing payment automatically");
+          startExecution(); // Use startExecution from useTask hook
+          
+          try {
+            if (!address) {
+              throw new Error("User wallet not connected");
+            }
+            
+            if (!publicClient) {
+              throw new Error("Public client not available");
+            }
+            
+            const to = result.paymentDetails.recipient;
+            const amountETHStr = result.paymentDetails.amount; // Already in ETH
+            const value = parseEther(amountETHStr);
+            
+            console.log("[Page] Executing ETH payment via agent:", {
+              userAddress: address,
+              to,
+              amountETH: amountETHStr,
+            });
+            
+            // Agent sends ETH from its own wallet (autonomous - no user signature needed)
+            const hash = await executeAgentPayment(
+              address as `0x${string}`, // User's wallet address (for logging)
+              to as `0x${string}`,      // Machine address (recipient)
+              amountETHStr              // Amount in ETH
+            );
+            
+            console.log("[Page] Payment transaction hash:", hash);
+            recordPayment(amountEth);
+            setTxHash(hash);
+            
+            // Wait for transaction confirmation
+            console.log("[Page] Waiting for transaction confirmation...");
+            await publicClient.waitForTransactionReceipt({ hash });
+            console.log("[Page] Transaction confirmed");
+            
+            // Retry with payment proof
+            console.log("[Page] Payment confirmed, retrying action with payment proof");
+            // State is already "executing" from startExecution(), no need to set again
+            
+            // Use device name in URL-friendly format for the endpoint
+            const deviceNameForUrl = device.id.replace(/-/g, "_");
+            const retryResult = await retryWithPaymentProof(
+              machine.url,
+              capability,
+              { 
+                device_id: device.id,
+                device_name: deviceNameForUrl,
+                action: parsedIntent.action,
+              },
+              hash
+            );
+            
+            console.log("[Page] Action completed successfully:", retryResult);
+            completeTask(retryResult);
+          } catch (paymentError: any) {
+            const errorMessage = paymentError?.message || paymentError?.toString() || JSON.stringify(paymentError) || "Payment failed";
+            console.error("[Page] Auto-payment failed:", {
+              error: paymentError,
+              message: errorMessage,
+              stack: paymentError?.stack,
+              name: paymentError?.name,
+              fullError: paymentError,
+            });
+            setError(errorMessage); // setError already sets state to "error"
+          }
+        } else if (!autonomousConfig.enabled) {
+          // Show setup prompt if not enabled or allowance not granted
+          setNeedsAutonomousSetup(true);
+          showQuote(result.paymentDetails);
+        } else {
+          // Exceeds limit, show quote for manual approval
+          showQuote(result.paymentDetails);
+        }
       }
     } catch (error: any) {
       console.error("[Page] handleExecute - Error:", {
@@ -202,6 +442,15 @@ export default function Home() {
         stack: error.stack,
         name: error.name
       });
+      
+      // Check if error is related to wallet/autonomous mode
+      if (error.message?.includes("Wallet not ready") || error.message?.includes("exceeds daily limit")) {
+        if (!autonomousConfig.enabled) {
+          setNeedsAutonomousSetup(true);
+          setShowAutonomousSetup(true);
+        }
+      }
+      
       setError(error.message || "Task execution failed");
     }
   };
@@ -222,9 +471,60 @@ export default function Home() {
       </div>
 
       {/* Wallet Identity Pill - Top Right */}
-      <div className="fixed top-6 right-6 z-50">
+      <div className="fixed top-6 right-6 z-50 flex items-center gap-3">
+        {mounted && !autonomousLoading && isConnected && (
+          <>
+            {autonomousConfig.enabled ? (
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-lg text-xs text-green-300 flex items-center gap-2">
+                  <Zap size={12} className="fill-green-400" />
+                  <span className="hidden sm:inline">
+                    Agente: {autonomousConfig.dailySpent.toFixed(4)}/{autonomousConfig.dailyLimit} ETH
+                  </span>
+                  <span className="sm:hidden">Agente</span>
+                </div>
+                {/* Debug: Quick reset button */}
+                <button
+                  onClick={() => setShowAutonomousSetup(true)}
+                  className="px-2 py-1.5 bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-600/30 rounded-lg text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
+                  title="🛠️ Debug: Configurar/Resetear"
+                >
+                  ⚙️
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAutonomousSetup(true)}
+                className="px-4 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 rounded-xl text-sm text-indigo-300 hover:text-indigo-200 transition-colors flex items-center gap-2"
+                title="Habilitar pagos automáticos"
+              >
+                <Zap size={14} />
+                <span className="hidden sm:inline">Activar Agente</span>
+                <span className="sm:hidden">Agente</span>
+              </button>
+            )}
+          </>
+        )}
         <WalletButton />
       </div>
+
+      {/* Autonomous Mode Setup Modal */}
+      {showAutonomousSetup && (
+        <AutonomousModeSetup
+          onSetupComplete={() => {
+            setShowAutonomousSetup(false);
+            setNeedsAutonomousSetup(false);
+            // Retry the last action if it failed due to missing setup
+            if (needsAutonomousSetup && taskData?.intent) {
+              handleExecute(taskData.intent);
+            }
+          }}
+          onClose={() => {
+            setShowAutonomousSetup(false);
+            setNeedsAutonomousSetup(false);
+          }}
+        />
+      )}
 
       {/* Content */}
       <div className="relative z-10 flex h-screen">
@@ -249,7 +549,7 @@ export default function Home() {
                       <button
                         key={idx}
                         onClick={() => handleExecute(action.command)}
-                        disabled={!isConnected}
+                        disabled={!mounted || !isConnected}
                         className="group flex items-center gap-3 px-5 py-3 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-2xl transition-all duration-300 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <div className="p-2 rounded-lg bg-black/50 text-zinc-400 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 transition-colors">
@@ -271,7 +571,7 @@ export default function Home() {
           {/* Command Input - God Bar */}
           <CommandInput
             onExecute={handleExecute}
-            disabled={state !== "idle" && state !== "success" && state !== "error" && !chatMessage}
+            disabled={Boolean(state !== "idle" && state !== "success" && state !== "error" && !chatMessage)}
           />
           
           {/* Reset button after success/error */}

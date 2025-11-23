@@ -148,9 +148,47 @@ export function TaskStage({ state, taskData }: TaskStageProps) {
               </p>
               <p className="text-sm text-zinc-400">
                 {taskData?.device?.name
-                  ? `${taskData.device.name} desbloqueado`
+                  ? `${taskData.device.name} ${taskData.device.type === "3d_printer" ? "imprimiendo" : "desbloqueado"}`
                   : "Acción ejecutada exitosamente"}
               </p>
+              
+              {/* Print Job Proof */}
+              {taskData?.data?.job_id && (
+                <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg w-full max-w-md">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-400">Job ID:</span>
+                      <span className="text-xs text-green-400 font-mono">
+                        {taskData.data.job_id.slice(0, 8)}...
+                      </span>
+                    </div>
+                    {taskData.data.job_proof && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Proof:</span>
+                        <span className="text-xs text-green-300 font-mono">
+                          {taskData.data.job_proof}
+                        </span>
+                      </div>
+                    )}
+                    {taskData.data.file_name && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Archivo:</span>
+                        <span className="text-xs text-white font-medium">
+                          {taskData.data.file_name}
+                        </span>
+                      </div>
+                    )}
+                    {taskData.data.transaction_hash && (
+                      <div className="flex items-center justify-between pt-2 border-t border-green-500/20">
+                        <span className="text-xs text-zinc-400">TX Hash:</span>
+                        <span className="text-xs text-green-400 font-mono">
+                          {taskData.data.transaction_hash.slice(0, 10)}...{taskData.data.transaction_hash.slice(-8)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

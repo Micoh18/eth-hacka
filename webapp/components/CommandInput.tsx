@@ -7,7 +7,7 @@ interface CommandInputProps {
   disabled?: boolean;
 }
 
-export function CommandInput({ onExecute, disabled }: CommandInputProps) {
+export function CommandInput({ onExecute, disabled = false }: CommandInputProps) {
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +55,7 @@ export function CommandInput({ onExecute, disabled }: CommandInputProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={disabled}
+          disabled={Boolean(disabled)}
           placeholder="Describe tu misión..."
           className="relative w-full bg-black/60 backdrop-blur-xl border border-white/10 text-white placeholder-zinc-500 rounded-xl py-4 px-6 text-lg focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed"
         />
