@@ -1,6 +1,6 @@
 "use client";
 
-import { Printer, Lock, Zap, ShoppingCart, Play, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Printer, Lock, Zap, ShoppingCart, Video, Play, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import type { DeviceDetail, Capability } from "@/types";
 
 interface DeviceCardProps {
@@ -14,6 +14,7 @@ const deviceIcons: Record<string, typeof Printer> = {
   "smart_lock": Lock,
   "ev_charger": Zap,
   "vending_machine": ShoppingCart,
+  "security_camera": Video, // Using Video icon for security camera (streaming/recording)
 };
 
 const statusColors: Record<string, string> = {
