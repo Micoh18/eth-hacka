@@ -46,7 +46,7 @@ export async function discoverMachines(filterAction?: string): Promise<Machine[]
   const machines: Machine[] = [];
   
   for (const entry of entriesToResolve) {
-    // If entry has ENS domain, resolve it
+    // If entry has ENS domain, try to resolve it
     const ensDomain = entry.ens || entry.ens_domain;
     
     if (ensDomain) {
@@ -70,17 +70,46 @@ export async function discoverMachines(filterAction?: string): Promise<Machine[]
         
         console.log("[Agent] discoverMachines - Resolved:", ensDomain, "→", resolved.url);
       } catch (error: any) {
-        console.error(`[Agent] discoverMachines - Failed to resolve ${ensDomain}:`, error.message);
-        // Continue with other ENS domains, but log the error
+        console.warn(`[Agent] discoverMachines - ENS resolution failed for ${ensDomain}, using fallback:`, error.message);
+        
+        // Fallback: Use direct API URL from entry or default
+        const fallbackUrl = (entry as any).url || process.env.NEXT_PUBLIC_MACHINE_API_URL || "http://localhost:8000";
+        const fallbackDeviceId = (entry as any).fallback_device_id || entry.id.replace(/-/g, "-");
+        const defaultPaymentAddress = process.env.NEXT_PUBLIC_DEFAULT_PAYMENT_ADDRESS || "0x0000000000000000000000000000000000000000";
+        
+        console.log("[Agent] discoverMachines - Using fallback (direct API):", {
+          url: fallbackUrl,
+          deviceId: fallbackDeviceId,
+          ensDomain
+        });
+        
+        machines.push({
+          id: entry.id,
+          name: entry.name,
+          url: fallbackUrl,
+          description: entry.description,
+          ens: ensDomain,
+          ens_domain: ensDomain,
+          payment_address: defaultPaymentAddress,
+          device_id: fallbackDeviceId,
+          device_name: fallbackDeviceId.replace(/-/g, "_"),
+          icon: entry.icon,
+        });
       }
     } else if (entry.url) {
       // Fallback: if no ENS but has URL, use it directly (legacy support)
       console.log("[Agent] discoverMachines - Using direct URL (no ENS):", entry.url);
+      const fallbackDeviceId = (entry as any).fallback_device_id || entry.id.replace(/-/g, "-");
+      const defaultPaymentAddress = process.env.NEXT_PUBLIC_DEFAULT_PAYMENT_ADDRESS || "0x0000000000000000000000000000000000000000";
+      
       machines.push({
         id: entry.id,
         name: entry.name,
         url: entry.url,
         description: entry.description,
+        payment_address: defaultPaymentAddress,
+        device_id: fallbackDeviceId,
+        device_name: fallbackDeviceId.replace(/-/g, "_"),
         icon: entry.icon,
       });
     }

@@ -3,21 +3,45 @@
     "id": "printer",
     "name": "3D Printer Lab",
     "ens": "3dprinter.eth",
+    "url": "http://localhost:8000",
     "icon": "Printer",
-    "description": "Plastic prototype printing"
+    "description": "Plastic prototype printing",
+    "fallback_device_id": "printer-3d-01"
   },
   {
     "id": "charger",
     "name": "Tesla Supercharger",
     "ens": "evcharger.eth",
+    "url": "http://localhost:8000",
     "icon": "Zap",
-    "description": "Level 3 fast charging"
+    "description": "Level 3 fast charging",
+    "fallback_device_id": "ev-station-01"
   },
   {
     "id": "lock",
     "name": "Main Door",
     "ens": "smartlock.eth",
+    "url": "http://localhost:8000",
     "icon": "Lock",
-    "description": "Access to Room 402"
+    "description": "Access to Room 402",
+    "fallback_device_id": "smart-lock-01"
+  },
+  {
+    "id": "vending",
+    "name": "Hall Dispenser",
+    "ens": "vendingmachine.eth",
+    "url": "http://localhost:8000",
+    "icon": "ShoppingCart",
+    "description": "Vending machine in hall",
+    "fallback_device_id": "vending-machine-01"
+  },
+  {
+    "id": "camera",
+    "name": "Hall Camera",
+    "ens": "camera.eth",
+    "url": "http://localhost:8000",
+    "icon": "Camera",
+    "description": "Security camera in hall",
+    "fallback_device_id": "camera-01"
   }
 ]
