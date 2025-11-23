@@ -114,7 +114,7 @@ async function parseWithOpenAI(text: string, apiKey: string) {
           {
             role: "system",
             content:
-              "You are an intent parser for an IoT device control system. Parse user commands and return JSON with: { action: string, device?: string, params?: object }. Actions can be: unlock, print, charge, etc. Devices are identified by name or ID.",
+              "You are an intelligent assistant for an IoT device control system. Determine if the user's message is an executable action or a conversation.\n\nIf ACTION: Return { \"type\": \"action\", \"action\": string, \"device\": string (optional), \"params\": object (optional) }\n\nIf CONVERSATION: Return { \"type\": \"chat\", \"message\": string } with a helpful response.",
           },
           {
             role: "user",
@@ -156,13 +156,13 @@ async function parseWithAnthropic(text: string, apiKey: string) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
+        model: process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022",
         max_tokens: 1024,
-        system: "You are an intent parser for an IoT device control system. Parse user commands in natural language and return ONLY valid JSON. The JSON must have this exact structure: { \"action\": string, \"device\": string (optional), \"params\": object (optional) }. Actions can be: unlock, print, charge, etc. Devices are identified by name, ID, or type. Return ONLY the JSON object, no additional text or explanation.",
+        system: "You are an intelligent assistant for an IoT device control system called 'Command Center'. Your job is to determine if the user's message is an executable action (like 'unlock door', 'print document', 'charge vehicle') or a conversational message (like greetings, questions, or general chat).\n\nIf it's an ACTION: Return JSON with type 'action': { \"type\": \"action\", \"action\": string, \"device\": string (optional), \"params\": object (optional) }\n\nIf it's a CONVERSATION: Return JSON with type 'chat' and provide a helpful, natural, conversational response in Spanish. Be friendly and helpful. If they ask about capabilities, explain what actions they can perform (unlock devices, print documents, charge vehicles). If they greet you, greet them back naturally. { \"type\": \"chat\", \"message\": string }\n\nActions can be: unlock, print, charge, etc. Devices are identified by name, ID, or type. Return ONLY valid JSON, no additional text.",
         messages: [
           {
             role: "user",
-            content: `Parse this IoT device command and return ONLY valid JSON: "${text}"\n\nReturn format: { "action": "unlock" | "print" | "charge", "device": "device-id-or-name" (optional), "params": {} (optional) }`,
+            content: `Analyze this message and determine if it's an executable action or a conversation:\n\n"${text}"\n\nIf it's an action, return: { "type": "action", "action": "unlock" | "print" | "charge", "device": "device-id-or-name" (optional), "params": {} (optional) }\n\nIf it's a conversation (greeting, question, general chat), return: { "type": "chat", "message": "your helpful, natural response in Spanish here" }`,
           },
         ],
       }),
@@ -192,7 +192,25 @@ function parseWithRegex(text: string) {
   console.log("[API] parseWithRegex - Parsing with regex");
   const lowerText = text.toLowerCase();
 
-  // Simple regex-based parsing
+  // Check if it's a conversational message (greetings, questions, etc.)
+  const isConversation = 
+    lowerText.match(/^(hola|hi|hello|hey|buenos|buenas|gracias|thanks|thank you|por favor|please)/i) ||
+    lowerText.match(/\?$/) ||
+    lowerText.match(/(qué|que|what|how|cuál|which|dónde|where|cuándo|when|quién|who|por qué|why)/i) ||
+    (!lowerText.includes("unlock") && !lowerText.includes("desbloquear") && 
+     !lowerText.includes("print") && !lowerText.includes("imprimir") && 
+     !lowerText.includes("charge") && !lowerText.includes("cargar"));
+
+  if (isConversation) {
+    const result = {
+      type: "chat" as const,
+      message: "Hola! Puedo ayudarte a ejecutar acciones en dispositivos IoT. Por ejemplo, puedes decirme 'Desbloquear smart lock', 'Imprimir en Lab 3', o 'Cargar en estación 1'. ¿En qué puedo ayudarte?",
+    };
+    console.log("[API] parseWithRegex - Detected conversation, result:", result);
+    return NextResponse.json(result);
+  }
+
+  // Simple regex-based parsing for actions
   let action = "unlock";
   let device: string | undefined;
 
@@ -213,12 +231,13 @@ function parseWithRegex(text: string) {
   }
 
   const result = {
+    type: "action" as const,
     action,
     device,
     confidence: 0.7,
   };
   
-  console.log("[API] parseWithRegex - Result:", result);
+  console.log("[API] parseWithRegex - Detected action, result:", result);
   return NextResponse.json(result);
 }
 

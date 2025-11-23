@@ -52,10 +52,12 @@ export interface Device {
 }
 
 export interface ParsedIntent {
-  action: string;
+  type: 'action' | 'chat';
+  action?: string;
   device?: string;
   params?: Record<string, any>;
   confidence?: number;
+  message?: string;
 }
 
 export interface TaskData {

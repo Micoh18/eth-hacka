@@ -7,6 +7,7 @@ export function useTask() {
   const [state, setState] = useState<TaskState>("idle");
   const [taskData, setTaskData] = useState<TaskData | null>(null);
   const [history, setHistory] = useState<TaskHistory[]>([]);
+  const [chatMessage, setChatMessage] = useState<string | null>(null);
 
   const startTask = useCallback((intent: string) => {
     const newTask: TaskData = {
@@ -74,15 +75,25 @@ export function useTask() {
     }
   }, [taskData]);
 
+  const updateChatMessage = useCallback((message: string) => {
+    setChatMessage(message);
+  }, []);
+
+  const clearChatMessage = useCallback(() => {
+    setChatMessage(null);
+  }, []);
+
   const reset = useCallback(() => {
     setState("idle");
     setTaskData(null);
+    setChatMessage(null);
   }, []);
 
   return {
     state,
     taskData,
     history,
+    chatMessage,
     startTask,
     setParsedIntent,
     setMachine,
@@ -93,6 +104,8 @@ export function useTask() {
     setTxHash,
     completeTask,
     setError,
+    updateChatMessage,
+    clearChatMessage,
     reset,
   };
 }

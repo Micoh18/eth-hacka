@@ -5,6 +5,7 @@ import { useAccount, useWalletClient, usePublicClient } from "wagmi";
 import { parseEther } from "viem";
 import { CommandInput } from "@/components/CommandInput";
 import { TaskStage } from "@/components/TaskStage";
+import { AgentMessage } from "@/components/AgentMessage";
 import { Sidebar } from "@/components/Sidebar";
 import { WalletButton } from "@/components/WalletButton";
 import { useTask } from "@/hooks/useTask";
@@ -28,6 +29,7 @@ export default function Home() {
     state,
     taskData,
     history,
+    chatMessage,
     startTask,
     setParsedIntent,
     setMachine,
@@ -38,6 +40,8 @@ export default function Home() {
     setTxHash,
     completeTask,
     setError,
+    updateChatMessage,
+    clearChatMessage,
     reset,
   } = useTask();
 
@@ -88,14 +92,12 @@ export default function Home() {
   }, [taskData, walletClient, publicClient, startExecution, setTxHash, completeTask, setError]);
 
   const handleExecute = async (command: string) => {
-    if (!isConnected) {
-      setError("Please connect your wallet first");
-      return;
-    }
+    // Clear chat message when starting new command
+    clearChatMessage();
 
+    // For chat mode, wallet connection is not required
+    // For action mode, wallet is required
     try {
-      startTask(command);
-
       // Step 1: Parse intent
       console.log("[Page] handleExecute - Step 1: Parsing intent for:", command);
       const parseResponse = await fetch("/api/agent/parse", {
@@ -114,6 +116,21 @@ export default function Home() {
 
       const parsedIntent = await parseResponse.json();
       console.log("[Page] handleExecute - Parsed intent:", parsedIntent);
+
+      // Check if it's a chat message or an action
+      if (parsedIntent.type === "chat") {
+        // Chat mode: just show the message
+        updateChatMessage(parsedIntent.message || "No response available");
+        return;
+      }
+
+      // Action mode: proceed with execution flow
+      if (!isConnected) {
+        setError("Please connect your wallet first");
+        return;
+      }
+
+      startTask(command);
       setParsedIntent(parsedIntent);
 
       // Step 2: Discover machines
@@ -220,7 +237,9 @@ export default function Home() {
         <main className="flex-1 flex flex-col lg:ml-20 xl:ml-20">
           {/* Main Content */}
           <div className="flex-1 flex items-center justify-center p-8">
-            {state === "idle" ? (
+            {chatMessage ? (
+              <AgentMessage message={chatMessage} />
+            ) : state === "idle" ? (
               <div className="w-full max-w-3xl">
                 {/* Quick Actions */}
                 <div className="flex flex-wrap gap-4 justify-center mb-12">
@@ -252,7 +271,7 @@ export default function Home() {
           {/* Command Input - God Bar */}
           <CommandInput
             onExecute={handleExecute}
-            disabled={state !== "idle" && state !== "success" && state !== "error"}
+            disabled={state !== "idle" && state !== "success" && state !== "error" && !chatMessage}
           />
           
           {/* Reset button after success/error */}
