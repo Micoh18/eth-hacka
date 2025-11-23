@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect, useBalance } from "wagmi";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 import { useEffect, useState } from "react";
 
 export function WalletButton() {
@@ -11,7 +11,7 @@ export function WalletButton() {
   const { disconnect } = useDisconnect();
   const { data: balance } = useBalance({
     address,
-    chainId: baseSepolia.id,
+    chainId: sepolia.id,
   });
 
   // Prevent hydration mismatch by only rendering after mount

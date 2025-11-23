@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAccount, useWalletClient, usePublicClient, useConnectorClient } from "wagmi";
 import { parseEther } from "viem";
-import { baseSepolia } from "@/lib/wallet";
+import { sepolia } from "@/lib/wallet";
 import { CommandInput } from "@/components/CommandInput";
 import { TaskStage } from "@/components/TaskStage";
 import { AgentMessage } from "@/components/AgentMessage";
@@ -37,7 +37,6 @@ export default function Home() {
     config: autonomousConfig,
     canPayAutonomously,
     recordPayment,
-    getSpendPermission,
     isLoading: autonomousLoading,
   } = useAutonomousMode();
 
@@ -97,67 +96,23 @@ export default function Home() {
           return;
         }
 
-        let hash: `0x${string}`;
+        // Agent sends ETH from its own wallet (autonomous - no user signature needed)
+        // This works on any chain (Ethereum Sepolia, Base, etc.)
+        if (!address) {
+          setError("User wallet not connected");
+          return;
+        }
 
-        // If autonomous mode is enabled, use Coinbase Smart Wallet Session Keys
-        if (autonomousConfig.enabled && autonomousConfig.spendPermission && connector) {
-          const permissionContext = getSpendPermission();
-          if (!permissionContext) {
-            setError("Spend permission not found. Please re-enable autonomous mode.");
-            return;
-          }
+        const amountETHStr = (Number(amount) / 1e18).toFixed(6);
+        const hash = await executeAgentPayment(
+          address as `0x${string}`, // User's wallet address (for logging)
+          taskData.paymentDetails.recipient as `0x${string}`, // Machine address
+          amountETHStr // Amount in ETH
+        );
 
-          // Get provider from connector
-          const provider = await connector.getProvider();
-          if (!provider) {
-            setError("Provider not available");
-            return;
-          }
-
-          // Use wallet_sendCalls with capabilities (Session Keys)
-          const amountHex = `0x${amount.toString(16)}`;
-          const chainId = `0x${baseSepolia.id.toString(16)}`; // Base Sepolia: 0x14a34
-
-          const txId = await provider.request({
-            method: "wallet_sendCalls",
-            params: [
-              {
-                chainId: chainId,
-                calls: [
-                  {
-                    to: taskData.paymentDetails.recipient,
-                    value: amountHex,
-                    data: "0x",
-                  },
-                ],
-                capabilities: {
-                  permissions: permissionContext, // Use the stored permission context
-                },
-              },
-            ],
-          });
-
-          hash = txId as `0x${string}`;
+        // Record payment if autonomous mode is enabled
+        if (autonomousConfig.enabled) {
           recordPayment(amountEth);
-        } else {
-          // Fallback to regular transaction
-          if (!walletClient) {
-            setError("Wallet not ready");
-            return;
-          }
-
-          // Agent sends ETH from its own wallet (autonomous - no user signature needed)
-          const amountETHStr = (Number(amount) / 1e18).toFixed(6);
-          hash = await executeAgentPayment(
-            address as `0x${string}`, // User's wallet address (for logging)
-            taskData.paymentDetails.recipient as `0x${string}`, // Machine address
-            amountETHStr // Amount in ETH
-          );
-
-          // Record payment if autonomous mode is enabled (shouldn't happen here, but just in case)
-          if (autonomousConfig.enabled) {
-            recordPayment(amountEth);
-          }
         }
 
         setTxHash(hash);
@@ -290,15 +245,36 @@ export default function Home() {
       setCapability(capability);
 
       // Step 5: Execute with payment
-      if (!walletClient || !publicClient) {
-        // Check if autonomous mode is needed
-        if (!autonomousConfig.enabled) {
+      console.log("[Page] Step 5: Checking autonomous mode before execution:", {
+        enabled: autonomousConfig.enabled,
+        allowanceGranted: autonomousConfig.allowanceGranted,
+        hasWalletClient: !!walletClient,
+        hasPublicClient: !!publicClient,
+        config: autonomousConfig,
+      });
+      
+      // For autonomous mode, we don't need walletClient/publicClient from user
+      // The agent uses its own wallet via private key
+      if (!autonomousConfig.enabled) {
+        console.log("[Page] Autonomous mode not enabled, checking wallet...");
+        // If autonomous mode is not enabled, we need user's wallet
+        if (!walletClient || !publicClient) {
+          console.log("[Page] Wallet not ready, showing setup modal");
           setNeedsAutonomousSetup(true);
           setShowAutonomousSetup(true);
           setError("Wallet not ready. Please enable autonomous mode to continue.");
           return;
         }
-        throw new Error("Wallet not ready");
+      } else {
+        console.log("[Page] Autonomous mode enabled, checking publicClient for tx confirmation...");
+        // Autonomous mode enabled - we still need publicClient for waiting for tx confirmation
+        if (!publicClient) {
+          console.log("[Page] Public client not available");
+          setError("Public client not available. Please connect your wallet.");
+          return;
+        }
+        // walletClient is not needed for autonomous mode (agent uses its own wallet)
+        console.log("[Page] Autonomous mode ready, proceeding with execution");
       }
 
       const result = await executeWithPayment(
@@ -355,6 +331,14 @@ export default function Home() {
       } else if (result.paymentDetails) {
         // Payment amount is already in ETH
         const amountEth = parseFloat(result.paymentDetails.amount);
+        
+        console.log("[Page] Payment required - Checking autonomous mode:", {
+          enabled: autonomousConfig.enabled,
+          allowanceGranted: autonomousConfig.allowanceGranted,
+          amountEth,
+          canPay: canPayAutonomously(amountEth),
+          config: autonomousConfig,
+        });
         
         // Check if we can pay autonomously
         if (autonomousConfig.enabled && autonomousConfig.allowanceGranted && canPayAutonomously(amountEth)) {
@@ -428,11 +412,18 @@ export default function Home() {
             setError(errorMessage); // setError already sets state to "error"
           }
         } else if (!autonomousConfig.enabled) {
-          // Show setup prompt if not enabled or allowance not granted
+          // Show setup prompt if not enabled
+          console.log("[Page] Autonomous mode not enabled, showing setup modal");
           setNeedsAutonomousSetup(true);
-          showQuote(result.paymentDetails);
+          setShowAutonomousSetup(true);
+        } else if (!autonomousConfig.allowanceGranted) {
+          // Show setup prompt if allowance not granted
+          console.log("[Page] Allowance not granted, showing setup modal");
+          setNeedsAutonomousSetup(true);
+          setShowAutonomousSetup(true);
         } else {
           // Exceeds limit, show quote for manual approval
+          console.log("[Page] Payment exceeds limit, showing quote modal");
           showQuote(result.paymentDetails);
         }
       }

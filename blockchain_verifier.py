@@ -28,7 +28,7 @@ async def verify_transaction_on_chain(
         tx_hash: Transaction hash to verify
         expected_recipient: Expected recipient address
         expected_amount: Expected amount in ETH (as string)
-        rpc_url: RPC endpoint URL (defaults to Base Sepolia)
+        rpc_url: RPC endpoint URL (defaults to Ethereum Sepolia)
     
     Returns:
         True if transaction is valid, False otherwise

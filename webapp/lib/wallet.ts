@@ -1,12 +1,12 @@
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 import { http } from "viem";
 import { createConfig } from "wagmi";
 import { coinbaseWallet } from "wagmi/connectors";
 
-const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "https://sepolia.base.org";
+const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "https://rpc.sepolia.org";
 
 export const wagmiConfig = createConfig({
-  chains: [baseSepolia],
+  chains: [sepolia],
   connectors: [
     coinbaseWallet({
       appName: "Command Center x402",
@@ -14,15 +14,15 @@ export const wagmiConfig = createConfig({
     }),
   ],
   transports: {
-    [baseSepolia.id]: http(rpcUrl),
+    [sepolia.id]: http(rpcUrl),
   },
 });
 
-export { baseSepolia };
+export { sepolia };
 
-// Base Sepolia USDC address (for testing)
-export const BASE_SEPOLIA_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+// Ethereum Sepolia USDC address (for testing - if needed)
+export const ETH_SEPOLIA_USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
 
-// Base Mainnet USDC address (for production)
-export const BASE_MAINNET_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+// Ethereum Mainnet USDC address (for production)
+export const ETH_MAINNET_USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 

@@ -9,14 +9,14 @@ import 'dotenv/config';
 import axios from 'axios';
 import { createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { baseSepolia } from 'viem/chains';
+import { sepolia } from 'viem/chains';
 import { createPublicClient } from 'viem';
 
 // Configuration
 const MACHINE_API_URL = process.env.MACHINE_API_URL || 'http://localhost:8000';
 const WALLET_KEY = process.env.WALLET_KEY;
 const MAX_AUTO_PAY_AMOUNT = parseFloat(process.env.MAX_AUTO_PAY_AMOUNT || '0.05');
-const RPC_URL = process.env.RPC_URL || 'https://sepolia.base.org';
+const RPC_URL = process.env.RPC_URL || 'https://rpc.sepolia.org';
 
 // Setup wallet (only if WALLET_KEY is provided)
 let account = null;
@@ -27,12 +27,12 @@ if (WALLET_KEY) {
   account = privateKeyToAccount(WALLET_KEY);
   walletClient = createWalletClient({
     account,
-    chain: baseSepolia,
+    chain: sepolia,
     transport: http(RPC_URL),
   });
 
   publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: sepolia,
     transport: http(RPC_URL),
   });
 }
@@ -174,12 +174,12 @@ async function main() {
   console.log(`💰 Max auto-pay: ${MAX_AUTO_PAY_AMOUNT} ETH`);
   console.log(`🔑 Wallet Address: ${account.address}`);
   console.log(`🌐 RPC URL: ${RPC_URL}`);
-  console.log(`🔗 Chain: Base Sepolia (Chain ID: ${baseSepolia.id})\n`);
+  console.log(`🔗 Chain: Ethereum Sepolia (Chain ID: ${sepolia.id})\n`);
   
   // Verify RPC connection
   try {
     const blockNumber = await publicClient.getBlockNumber();
-    console.log(`✅ Connected to Base Sepolia (Block: ${blockNumber})\n`);
+    console.log(`✅ Connected to Ethereum Sepolia (Block: ${blockNumber})\n`);
   } catch (error) {
     console.error(`❌ Failed to connect to RPC: ${error.message}\n`);
   }

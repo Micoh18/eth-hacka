@@ -184,11 +184,11 @@ async def get_ai_manifest():
             }
         ],
         "payment_config": {
-            "chainId": 84532,  # Base Sepolia
-            "chainName": "Base Sepolia",
+            "chainId": 11155111,  # Ethereum Sepolia
+            "chainName": "Ethereum Sepolia",
             "token": "ETH",  # Native ETH
             "recipient": os.getenv("VENDOR_ADDRESS", "0x13EB37a124F98A76c973c3fce0F3FF829c7df57C"),  # seller-agent
-            "rpcUrl": "https://sepolia.base.org"
+            "rpcUrl": "https://rpc.sepolia.org"
         }
         }
         logger.info(f"[API] GET /ai-manifest - Returning manifest with {len(manifest['capabilities'])} capabilities")
@@ -231,8 +231,8 @@ async def unlock_device(
             detail={
                 "error": "Payment Required",
                 "paymentDetails": {
-                    "chainId": 84532,  # Base Sepolia
-                    "chainName": "Base Sepolia",
+                    "chainId": 11155111,  # Ethereum Sepolia
+                    "chainName": "Ethereum Sepolia",
                     "token": "ETH",
                     "recipient": os.getenv("VENDOR_ADDRESS", "0x13EB37a124F98A76c973c3fce0F3FF829c7df57C"),  # seller-agent
                     "amount": "0.001",  # Default price
@@ -264,7 +264,7 @@ async def unlock_device(
             payment_config = {
                 "recipient": os.getenv("VENDOR_ADDRESS", "0x13EB37a124F98A76c973c3fce0F3FF829c7df57C"),  # seller-agent
                 "amount": "0.001",
-                "rpcUrl": os.getenv("RPC_URL", "https://sepolia.base.org")
+                "rpcUrl": os.getenv("RPC_URL", "https://rpc.sepolia.org")
             }
             
             # Verify transaction (async, but we'll use sync for simplicity in FastAPI)
@@ -462,11 +462,11 @@ async def get_device_manifest(device_name: str):
         "description": f"{device.name} - {device.type} device",
         "capabilities": capabilities,
         "payment_config": {
-            "chainId": 84532,  # Base Sepolia
-            "chainName": "Base Sepolia",
+            "chainId": 11155111,  # Ethereum Sepolia
+            "chainName": "Ethereum Sepolia",
             "token": "ETH",
             "recipient": os.getenv("VENDOR_ADDRESS", "0x13EB37a124F98A76c973c3fce0F3FF829c7df57C"),
-            "rpcUrl": "https://sepolia.base.org"
+            "rpcUrl": "https://rpc.sepolia.org"
         },
         "device_info": {
             "id": device.id,
@@ -545,8 +545,8 @@ async def execute_device_job(
             detail={
                 "error": "Payment Required",
                 "paymentDetails": {
-                    "chainId": 84532,  # Base Sepolia
-                    "chainName": "Base Sepolia",
+                    "chainId": 11155111,  # Ethereum Sepolia
+                    "chainName": "Ethereum Sepolia",
                     "token": "ETH",
                     "recipient": os.getenv("VENDOR_ADDRESS", "0x13EB37a124F98A76c973c3fce0F3FF829c7df57C"),
                     "amount": amount,

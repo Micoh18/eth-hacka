@@ -7,11 +7,19 @@
 
 import { createWalletClient, createPublicClient, http, parseUnits, formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 
-// USDC Contract Addresses
-const BASE_SEPOLIA_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-const BASE_MAINNET_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+// RPC URLs for Ethereum Sepolia (with fallbacks)
+const ETH_SEPOLIA_RPC_URLS = [
+  process.env.NEXT_PUBLIC_RPC_URL, // User's custom RPC (if set)
+  "https://ethereum-sepolia-rpc.publicnode.com", // Public node (usually faster)
+  "https://rpc.sepolia.org", // Fallback
+  "https://sepolia.gateway.tenderly.co", // Another fallback
+].filter(Boolean) as string[];
+
+// USDC Contract Addresses (for reference, currently using ETH native)
+const ETH_SEPOLIA_USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+const ETH_MAINNET_USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
 // USDC ABI (minimal - only what we need)
 const USDC_ABI = [
@@ -49,8 +57,8 @@ const USDC_ABI = [
  * Get USDC contract address based on chain
  */
 export function getUSDCAddress(): `0x${string}` {
-  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID || "84532";
-  return (chainId === "8453" ? BASE_MAINNET_USDC : BASE_SEPOLIA_USDC) as `0x${string}`;
+  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID || "11155111";
+  return (chainId === "1" ? ETH_MAINNET_USDC : ETH_SEPOLIA_USDC) as `0x${string}`;
 }
 
 /**
@@ -58,8 +66,8 @@ export function getUSDCAddress(): `0x${string}` {
  */
 export async function checkUSDCBalance(address: `0x${string}`): Promise<string> {
   const publicClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL || "https://sepolia.base.org"),
+    chain: sepolia,
+    transport: http(process.env.NEXT_PUBLIC_RPC_URL || "https://rpc.sepolia.org"),
   });
 
   const usdcAddress = getUSDCAddress();
@@ -77,13 +85,51 @@ export async function checkUSDCBalance(address: `0x${string}`): Promise<string> 
  * Check ETH balance of an address
  */
 export async function checkETHBalance(address: `0x${string}`): Promise<string> {
+  // Force Ethereum Sepolia RPC URL (not Base Sepolia)
+  let rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || ETH_SEPOLIA_RPC_URLS[0];
+  if (rpcUrl.includes("base.org") || rpcUrl.includes("base-sepolia")) {
+    rpcUrl = ETH_SEPOLIA_RPC_URLS[0];
+  }
+
+  // Try with timeout and retry logic
   const publicClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL || "https://sepolia.base.org"),
+    chain: sepolia,
+    transport: http(rpcUrl, {
+      timeout: 30000, // 30 seconds timeout
+      retryCount: 2, // Retry up to 2 times
+    }),
   });
 
-  const balance = await publicClient.getBalance({ address });
-  return formatUnits(balance, 18); // ETH has 18 decimals
+  try {
+    const balance = await publicClient.getBalance({ address });
+    return formatUnits(balance, 18); // ETH has 18 decimals
+  } catch (error: any) {
+    // If timeout, try fallback RPCs
+    if (error.message?.includes("timeout") || error.message?.includes("took too long")) {
+      console.warn(`[Agent Payment] RPC ${rpcUrl} timed out, trying fallback...`);
+      
+      for (const fallbackUrl of ETH_SEPOLIA_RPC_URLS.slice(1)) {
+        if (fallbackUrl === rpcUrl) continue; // Skip the one we just tried
+        
+        try {
+          const fallbackClient = createPublicClient({
+            chain: sepolia,
+            transport: http(fallbackUrl, {
+              timeout: 30000,
+              retryCount: 1,
+            }),
+          });
+          const balance = await fallbackClient.getBalance({ address });
+          console.log(`[Agent Payment] Fallback RPC ${fallbackUrl} succeeded`);
+          return formatUnits(balance, 18);
+        } catch (fallbackError) {
+          console.warn(`[Agent Payment] Fallback RPC ${fallbackUrl} also failed:`, fallbackError);
+          continue;
+        }
+      }
+    }
+    throw error;
+  }
 }
 
 /**
@@ -116,25 +162,45 @@ export async function executeAgentPayment(
   // Create agent account from private key
   const agentAccount = privateKeyToAccount(`0x${cleanKey}` as `0x${string}`);
 
-  // Create wallet and public clients for the agent
-  const agentClient = createWalletClient({
-    account: agentAccount,
-    chain: baseSepolia,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL || "https://sepolia.base.org"),
-  });
+  // Force Ethereum Sepolia RPC URL (not Base Sepolia)
+  // We're using Ethereum Sepolia chain, so we must use Ethereum Sepolia RPC
+  let rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || ETH_SEPOLIA_RPC_URLS[0];
+  
+  // If the RPC URL is for Base Sepolia, override it with Ethereum Sepolia
+  if (rpcUrl.includes("base.org") || rpcUrl.includes("base-sepolia")) {
+    console.warn("[Agent Payment] RPC URL is Base Sepolia, but we need Ethereum Sepolia. Overriding with Ethereum Sepolia RPC.");
+    rpcUrl = ETH_SEPOLIA_RPC_URLS[0];
+  }
 
-  const publicClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL || "https://sepolia.base.org"),
-  });
+  // Helper function to create clients with a specific RPC URL
+  const createClientsWithRpc = (url: string) => {
+    const transport = http(url, {
+      timeout: 30000, // 30 seconds timeout
+      retryCount: 2, // Retry up to 2 times
+    });
+    
+    return {
+      agentClient: createWalletClient({
+        account: agentAccount,
+        chain: sepolia,
+        transport,
+      }),
+      publicClient: createPublicClient({
+        chain: sepolia,
+        transport,
+      }),
+    };
+  };
+
+  // Create wallet and public clients for the agent with timeout and retry
+  let { agentClient, publicClient } = createClientsWithRpc(rpcUrl);
 
   const amount = parseUnits(amountETH, 18); // ETH has 18 decimals
 
   console.log("[Agent Payment] Executing ETH transfer:", {
-    from: userAddress,
+    from: agentAccount.address,
     to: machineAddress,
     amount: amountETH,
-    agent: agentAccount.address,
   });
 
   // Check agent's ETH balance (agent needs ETH to send payments autonomously)
@@ -191,6 +257,36 @@ export async function executeAgentPayment(
     return hash;
   } catch (error: any) {
     console.error("[Agent Payment] ❌ Error:", error);
+    
+    // If timeout, try fallback RPCs
+    if (error.message?.includes("timeout") || error.message?.includes("took too long")) {
+      console.warn(`[Agent Payment] RPC ${rpcUrl} timed out, trying fallback RPCs...`);
+      
+      for (const fallbackUrl of ETH_SEPOLIA_RPC_URLS.slice(1)) {
+        if (fallbackUrl === rpcUrl) continue; // Skip the one we just tried
+        
+        try {
+          console.log(`[Agent Payment] Trying fallback RPC: ${fallbackUrl}`);
+          const { agentClient: fallbackAgentClient } = createClientsWithRpc(fallbackUrl);
+          
+          const hash = await fallbackAgentClient.sendTransaction({
+            to: machineAddress,
+            value: amount,
+          });
+          
+          console.log(`[Agent Payment] ✅ Payment executed via fallback RPC! TX:`, hash);
+          return hash;
+        } catch (fallbackError: any) {
+          console.warn(`[Agent Payment] Fallback RPC ${fallbackUrl} also failed:`, fallbackError.message);
+          continue;
+        }
+      }
+      
+      throw new Error(
+        `Payment failed: All RPC endpoints timed out. Please check your internet connection or try again later. ` +
+        `If the problem persists, consider using a private RPC endpoint (Infura, Alchemy, etc.) by setting NEXT_PUBLIC_RPC_URL in .env.local`
+      );
+    }
     
     // Provide helpful error messages
     if (error.message?.includes("insufficient funds") || 

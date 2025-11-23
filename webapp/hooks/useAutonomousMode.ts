@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const AUTONOMOUS_MODE_KEY = "agent_autonomous_mode";
 const AUTONOMOUS_MODE_LIMIT_KEY = "agent_autonomous_limit";
@@ -26,6 +26,8 @@ export function useAutonomousMode() {
   // Start with default config to avoid hydration mismatch
   const [config, setConfig] = useState<AutonomousModeConfig>(DEFAULT_CONFIG);
   const [isLoading, setIsLoading] = useState(true);
+  // Use a ref to track the last known config to avoid infinite loops
+  const lastConfigRef = useRef<string | null>(null);
 
   // Load config from localStorage on mount (client-side only)
   useEffect(() => {
@@ -35,38 +37,104 @@ export function useAutonomousMode() {
       return;
     }
 
-    try {
-      const stored = localStorage.getItem(AUTONOMOUS_MODE_KEY);
-      const storedLimit = localStorage.getItem(AUTONOMOUS_MODE_LIMIT_KEY);
-      
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Reset daily spent if it's a new day
-        const today = new Date().toISOString().split("T")[0];
-        if (parsed.lastResetDate !== today) {
-          parsed.dailySpent = 0;
-          parsed.lastResetDate = today;
+    const loadConfig = () => {
+      try {
+        const stored = localStorage.getItem(AUTONOMOUS_MODE_KEY);
+        const storedLimit = localStorage.getItem(AUTONOMOUS_MODE_LIMIT_KEY);
+        
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          // Reset daily spent if it's a new day
+          const today = new Date().toISOString().split("T")[0];
+          if (parsed.lastResetDate !== today) {
+            parsed.dailySpent = 0;
+            parsed.lastResetDate = today;
+          }
+          console.log("[useAutonomousMode] Loaded config from localStorage:", parsed);
+          setConfig(parsed);
+        } else if (storedLimit) {
+          // Legacy support
+          const legacyConfig = {
+            ...DEFAULT_CONFIG,
+            dailyLimit: parseFloat(storedLimit),
+          };
+          console.log("[useAutonomousMode] Loaded legacy config:", legacyConfig);
+          setConfig(legacyConfig);
+        } else {
+          console.log("[useAutonomousMode] No config found, using default");
         }
-        setConfig(parsed);
-      } else if (storedLimit) {
-        // Legacy support
-        setConfig({
-          ...DEFAULT_CONFIG,
-          dailyLimit: parseFloat(storedLimit),
-        });
+      } catch (error) {
+        console.error("[useAutonomousMode] Failed to load config:", error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("[useAutonomousMode] Failed to load config:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    loadConfig();
+
+    // Listen for storage changes (when config is updated in another component)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === AUTONOMOUS_MODE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          console.log("[useAutonomousMode] Storage changed, updating config:", parsed);
+          setConfig(parsed);
+        } catch (error) {
+          console.error("[useAutonomousMode] Failed to parse storage change:", error);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    // Listen for custom event (same-tab updates)
+    const handleCustomEvent = (e: CustomEvent) => {
+      console.log("[useAutonomousMode] Custom event received, updating config:", e.detail);
+      setConfig(e.detail as AutonomousModeConfig);
+    };
+    
+    window.addEventListener("autonomousModeUpdated", handleCustomEvent as EventListener);
+
+    // Also poll for changes (for same-tab updates as fallback)
+    // Initialize ref with current stored value
+    const currentStored = localStorage.getItem(AUTONOMOUS_MODE_KEY);
+    lastConfigRef.current = currentStored;
+    
+    const interval = setInterval(() => {
+      const stored = localStorage.getItem(AUTONOMOUS_MODE_KEY);
+      if (stored && stored !== lastConfigRef.current) {
+        try {
+          const parsed = JSON.parse(stored);
+          console.log("[useAutonomousMode] Config changed via polling, updating:", parsed);
+          lastConfigRef.current = stored;
+          setConfig(parsed);
+        } catch (error) {
+          // Ignore parse errors
+        }
+      }
+    }, 200); // Check every 200ms
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("autonomousModeUpdated", handleCustomEvent as EventListener);
+      clearInterval(interval);
+    };
   }, []);
 
   // Save config to localStorage
   const saveConfig = useCallback((newConfig: AutonomousModeConfig) => {
     try {
-      localStorage.setItem(AUTONOMOUS_MODE_KEY, JSON.stringify(newConfig));
+      console.log("[useAutonomousMode] saveConfig - Saving config:", newConfig);
+      const configStr = JSON.stringify(newConfig);
+      localStorage.setItem(AUTONOMOUS_MODE_KEY, configStr);
       setConfig(newConfig);
+      
+      // Dispatch custom event to notify other components
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("autonomousModeUpdated", { detail: newConfig }));
+      }
+      
+      console.log("[useAutonomousMode] saveConfig - Config saved and state updated");
     } catch (error) {
       console.error("[useAutonomousMode] Failed to save config:", error);
     }
@@ -105,13 +173,26 @@ export function useAutonomousMode() {
   );
 
   // Mark allowance as granted (called after user approves USDC)
+  // Uses functional update to read latest config state
   const markAllowanceGranted = useCallback(() => {
-    const newConfig: AutonomousModeConfig = {
-      ...config,
-      allowanceGranted: true,
-    };
-    saveConfig(newConfig);
-  }, [config, saveConfig]);
+    setConfig((currentConfig) => {
+      const newConfig: AutonomousModeConfig = {
+        ...currentConfig,
+        allowanceGranted: true,
+      };
+      // Save to localStorage
+      try {
+        const configStr = JSON.stringify(newConfig);
+        localStorage.setItem(AUTONOMOUS_MODE_KEY, configStr);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("autonomousModeUpdated", { detail: newConfig }));
+        }
+      } catch (error) {
+        console.error("[useAutonomousMode] Failed to save config:", error);
+      }
+      return newConfig;
+    });
+  }, []);
 
   // Disable autonomous mode
   const disableAutonomousMode = useCallback(() => {

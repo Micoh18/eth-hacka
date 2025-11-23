@@ -104,7 +104,7 @@ export function TaskStage({ state, taskData }: TaskStageProps) {
                   <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
                 )}
                 <span className="text-sm text-zinc-300">
-                  Procesando pago en Base...
+                  Procesando pago en Ethereum Sepolia...
                 </span>
               </div>
               {taskData?.txHash && (

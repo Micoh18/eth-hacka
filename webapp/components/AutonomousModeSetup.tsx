@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useAutonomousMode } from "@/hooks/useAutonomousMode";
-import { AuthorizeAgentButton } from "@/components/AuthorizeAgentButton";
 import { Zap, Shield, X, RotateCcw } from "lucide-react";
 
 interface AutonomousModeSetupProps {
@@ -14,41 +13,50 @@ export function AutonomousModeSetup({
   onSetupComplete,
   onClose,
 }: AutonomousModeSetupProps) {
-  const { enableAutonomousMode, disableAutonomousMode, markAllowanceGranted, config } = useAutonomousMode();
+  const { enableAutonomousMode, disableAutonomousMode, config } = useAutonomousMode();
   const [dailyLimit, setDailyLimit] = useState("0.1");
   const [isEnabling, setIsEnabling] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
 
   const handleEnable = async () => {
+    console.log("[AutonomousModeSetup] handleEnable - Starting...");
     setIsEnabling(true);
     try {
       const limit = parseFloat(dailyLimit);
+      console.log("[AutonomousModeSetup] handleEnable - Daily limit:", limit);
+      
       if (isNaN(limit) || limit <= 0) {
+        console.error("[AutonomousModeSetup] handleEnable - Invalid limit");
         alert("Por favor ingresa un límite diario válido");
+        setIsEnabling(false);
         return;
       }
 
       // Enable autonomous mode (for ETH, no authorization needed)
-      await enableAutonomousMode(limit);
+      console.log("[AutonomousModeSetup] handleEnable - Calling enableAutonomousMode...");
+      const newConfig = await enableAutonomousMode(limit);
+      console.log("[AutonomousModeSetup] handleEnable - Autonomous mode enabled:", newConfig);
       
-      // For ETH, we can mark as ready immediately (no token approval needed)
-      markAllowanceGranted();
+      // For ETH, enableAutonomousMode already sets allowanceGranted: true
+      // No need to call markAllowanceGranted() as it would overwrite with stale config
       
-      // Complete setup
-      onSetupComplete?.();
+      setIsEnabling(false);
+      setAuthorized(true);
+      
+      // Wait a bit to show success message, then close
+      setTimeout(() => {
+        console.log("[AutonomousModeSetup] handleEnable - Setup complete, closing modal...");
+        onSetupComplete?.();
+      }, 2000);
     } catch (error: any) {
-      console.error("[AutonomousModeSetup] Failed to enable:", error);
+      console.error("[AutonomousModeSetup] handleEnable - Error:", error);
+      console.error("[AutonomousModeSetup] handleEnable - Error stack:", error?.stack);
       alert("Error al activar modo autónomo: " + (error.message || "Error desconocido"));
-    } finally {
       setIsEnabling(false);
     }
   };
 
-  const handleAuthorized = () => {
-    markAllowanceGranted();
-    alert("¡Modo Autónomo Activado! El agente puede pagar automáticamente dentro del límite.");
-    onSetupComplete?.();
-  };
 
   const handleReset = async () => {
     if (!confirm("¿Estás seguro de que quieres resetear el modo autónomo? Esto eliminará todos los permisos y configuraciones.")) {
@@ -140,23 +148,41 @@ export function AutonomousModeSetup({
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3">
-          {onClose && (
+        {!authorized ? (
+          <div className="flex gap-3">
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-zinc-300 hover:text-white transition-colors text-sm font-medium"
+              >
+                Cancelar
+              </button>
+            )}
             <button
-              onClick={onClose}
-              className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-zinc-300 hover:text-white transition-colors text-sm font-medium"
+              onClick={handleEnable}
+              disabled={Boolean(isEnabling)}
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Cancelar
+              {isEnabling ? "Activando..." : "Activar Modo Autónomo"}
             </button>
-          )}
-          <button
-            onClick={handleEnable}
-            disabled={Boolean(isEnabling)}
-            className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isEnabling ? "Activando..." : "Activar Modo Autónomo"}
-          </button>
-        </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Shield className="text-green-400" size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-400">
+                  ¡Modo Autónomo Activado!
+                </p>
+                <p className="text-xs text-green-300/70 mt-1">
+                  El agente puede pagar automáticamente hasta {dailyLimit} ETH por día.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Status indicator */}
         {config.enabled && (
