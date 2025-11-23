@@ -129,7 +129,16 @@ async function parseWithOpenAI(text: string, apiKey: string) {
           {
             role: "system",
             content:
-              "You are an intelligent assistant for an IoT device control system. Determine if the user's message is an executable action or a conversation.\n\nIf ACTION: Return { \"type\": \"action\", \"action\": string, \"device\": string (optional), \"params\": object (optional) }\n\nIf CONVERSATION: Return { \"type\": \"chat\", \"message\": string } with a helpful response.",
+              `You are an intelligent assistant for an IoT device control system. Determine if the user's message is an executable action or a conversation.
+
+AVAILABLE DEVICES (4 total):
+1. smart_lock - Actions: unlock (0.001 ETH), lock (free)
+2. 3d_printer - Actions: print (0.002 ETH), buy_filament (0.003 ETH), pause/cancel (free)
+3. ev_charger - Actions: charge (0.005 ETH), stop (free)
+4. vending_machine - Actions: dispense (0.003 ETH), restock (0.004 ETH), check_inventory (free)
+
+If ACTION: Return { "type": "action", "action": string, "device": string (optional), "params": object (optional) }
+If CONVERSATION: Return { "type": "chat", "message": string } with a helpful response in Spanish. Guide users about available devices and actions.`,
           },
           {
             role: "user",
@@ -173,11 +182,46 @@ async function parseWithAnthropic(text: string, apiKey: string) {
       body: JSON.stringify({
         model: process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022",
         max_tokens: 1024,
-        system: "You are an intelligent assistant for an IoT device control system called 'Command Center'. Your job is to determine if the user's message is an executable action (like 'unlock door', 'print document', 'charge vehicle') or a conversational message (like greetings, questions, or general chat).\n\nIf it's an ACTION: Return JSON with type 'action': { \"type\": \"action\", \"action\": string, \"device\": string (optional), \"params\": object (optional) }\n\nIf it's a CONVERSATION: Return JSON with type 'chat' and provide a helpful, natural, conversational response in Spanish. Be friendly and helpful. If they ask about capabilities, explain what actions they can perform (unlock devices, print documents, charge vehicles). If they greet you, greet them back naturally. { \"type\": \"chat\", \"message\": string }\n\nActions can be: unlock, print, charge, etc. Devices are identified by name, ID, or type. Return ONLY valid JSON, no additional text.",
+        system: `You are an intelligent assistant for an IoT device control system called 'Command Center'. Your job is to determine if the user's message is an executable action or a conversational message.
+
+AVAILABLE DEVICES (4 total):
+1. smart_lock - Smart lock devices (e.g., "smart_lock_01")
+   - Actions: unlock (0.001 ETH), lock (free), check_access_log (free)
+   - Example: "Desbloquear smart lock", "Unlock door"
+
+2. 3d_printer - 3D printer devices (e.g., "printer_3d_01")
+   - Actions: print (0.002 ETH), buy_filament (0.003 ETH), pause (free), cancel (free)
+   - Example: "Imprimir documento", "Print on Lab 3", "Comprar filamento PLA"
+
+3. ev_charger - EV charging stations (e.g., "ev_station_01")
+   - Actions: charge (0.005 ETH), stop (free), check_availability (free)
+   - Example: "Cargar vehículo", "Charge at station 1", "Stop charging"
+
+4. vending_machine - Vending machines (e.g., "vending_machine_01")
+   - Actions: dispense (0.003 ETH), restock (0.004 ETH), check_inventory (free)
+   - Example: "Dispensar producto", "Dispense from vending machine", "Restock slot 5"
+
+INSTRUCTIONS:
+- If it's an ACTION: Return JSON with type 'action': { "type": "action", "action": string, "device": string (optional), "params": object (optional) }
+- If it's a CONVERSATION: Return JSON with type 'chat' and provide a helpful, natural response in Spanish. Be friendly and guide users about available devices and actions.
+- When users ask about capabilities, list all 4 devices and their actions.
+- When users greet you, greet them back and offer to help with device actions.
+- Actions can be: unlock, lock, print, buy_filament, pause, cancel, charge, stop, dispense, restock, check_inventory, check_availability, check_access_log
+- Return ONLY valid JSON, no additional text.`,
         messages: [
           {
             role: "user",
-            content: `Analyze this message and determine if it's an executable action or a conversation:\n\n"${text}"\n\nIf it's an action, return: { "type": "action", "action": "unlock" | "print" | "charge", "device": "device-id-or-name" (optional), "params": {} (optional) }\n\nIf it's a conversation (greeting, question, general chat), return: { "type": "chat", "message": "your helpful, natural response in Spanish here" }`,
+            content: `Analyze this message and determine if it's an executable action or a conversation:\n\n"${text}"\n\nAVAILABLE ACTIONS:
+- unlock/lock (smart_lock): Unlock or lock a smart lock device
+- print (3d_printer): Print a document on a 3D printer
+- buy_filament (3d_printer): Purchase filament material (PLA, ABS, PETG, TPU)
+- pause/cancel (3d_printer): Pause or cancel a print job
+- charge/stop (ev_charger): Start or stop a vehicle charging session
+- dispense (vending_machine): Dispense a product from a vending machine
+- restock (vending_machine): Restock products in a vending machine
+- check_inventory (vending_machine): Check available products
+
+If it's an action, return: { "type": "action", "action": "unlock" | "print" | "charge" | "dispense" | "restock" | etc., "device": "device-id-or-name" (optional), "params": {} (optional) }\n\nIf it's a conversation (greeting, question about capabilities, general chat), return: { "type": "chat", "message": "your helpful, natural response in Spanish here. If they ask about capabilities, mention all 4 devices and their main actions." }`,
           },
         ],
       }),
@@ -216,7 +260,7 @@ function parseWithRegex(text: string) {
   if (isClearConversation) {
     const result = {
       type: "chat" as const,
-      message: "Hola! Puedo ayudarte a ejecutar acciones en dispositivos IoT. Por ejemplo, puedes decirme 'Desbloquear smart lock', 'Imprimir en Lab 3', o 'Cargar en estación 1'. ¿En qué puedo ayudarte?",
+      message: "Hola! Puedo ayudarte a ejecutar acciones en dispositivos IoT. Tenemos 4 dispositivos disponibles:\n\n1. **Smart Lock** - Desbloquear/Bloquear (0.001 ETH)\n2. **3D Printer** - Imprimir documentos, comprar filamento (0.002-0.003 ETH)\n3. **EV Charger** - Cargar vehículos (0.005 ETH)\n4. **Vending Machine** - Dispensar productos, reabastecer (0.003-0.004 ETH)\n\nEjemplos: 'Desbloquear smart lock', 'Imprimir documento', 'Cargar vehículo', 'Dispensar producto'. ¿En qué puedo ayudarte?",
       confidence: 0.9, // High confidence for clear conversations
     };
     console.log("[API] parseWithRegex - Detected clear conversation, result:", result);
@@ -231,10 +275,15 @@ function parseWithRegex(text: string) {
   // Check for action keywords with high confidence patterns
   const actionPatterns = [
     { keywords: ["unlock", "desbloquear", "abrir"], action: "unlock", confidence: 0.9 },
+    { keywords: ["lock", "bloquear", "cerrar"], action: "lock", confidence: 0.9 },
     { keywords: ["print", "imprimir"], action: "print", confidence: 0.9 },
     { keywords: ["charge", "cargar"], action: "charge", confidence: 0.9 },
-    { keywords: ["dispense", "dispensar"], action: "dispense", confidence: 0.9 },
-    { keywords: ["capture", "capturar"], action: "capture", confidence: 0.9 },
+    { keywords: ["stop", "detener", "parar"], action: "stop", confidence: 0.9 },
+    { keywords: ["dispense", "dispensar", "sacar"], action: "dispense", confidence: 0.9 },
+    { keywords: ["restock", "reabastecer", "reponer"], action: "restock", confidence: 0.9 },
+    { keywords: ["buy", "comprar", "purchase"], action: "buy_filament", confidence: 0.8 },
+    { keywords: ["pause", "pausar"], action: "pause", confidence: 0.9 },
+    { keywords: ["cancel", "cancelar"], action: "cancel", confidence: 0.9 },
   ];
 
   for (const pattern of actionPatterns) {
@@ -249,7 +298,7 @@ function parseWithRegex(text: string) {
   if (!action) {
     const result = {
       type: "chat" as const,
-      message: "No entendí tu mensaje. ¿Podrías ser más específico? Por ejemplo: 'Desbloquear smart lock', 'Imprimir documento', o 'Cargar vehículo'.",
+      message: "No entendí tu mensaje. ¿Podrías ser más específico? Tenemos 4 dispositivos disponibles:\n\n• **Smart Lock**: Desbloquear/Bloquear\n• **3D Printer**: Imprimir, Comprar filamento, Pausar/Cancelar\n• **EV Charger**: Cargar vehículo, Detener carga\n• **Vending Machine**: Dispensar producto, Reabastecer\n\nEjemplos: 'Desbloquear smart lock', 'Imprimir documento', 'Cargar vehículo', 'Dispensar producto'.",
       confidence: 0.3, // Low confidence - should trigger AI parsing
     };
     console.log("[API] parseWithRegex - No clear action detected, low confidence, result:", result);
@@ -260,7 +309,7 @@ function parseWithRegex(text: string) {
   const devicePatterns = [
     /(?:en|in|on|at)\s+([a-z0-9\s-]+?)(?:\s|$|,|\.)/i, // "en Lab 3", "in station 1"
     /(?:device|dispositivo|lock|impresora|printer|estaci[oó]n|lab|station)\s+([a-z0-9-]+)/i,
-    /(?:smart\s+lock|3d\s+printer|ev\s+charger|vending\s+machine)/i,
+    /(?:smart\s+lock|3d\s+printer|ev\s+charger|vending\s+machine|máquina\s+expendedora|expendedora)/i,
   ];
 
   for (const pattern of devicePatterns) {

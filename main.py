@@ -604,6 +604,77 @@ async def get_device_manifest(device_name: str):
             },
             "payment_required": False
         })
+    elif device.type == "vending_machine":
+        capabilities.append({
+            "id": "dispense_product",
+            "endpoint": f"{device_path}/job",
+            "method": "POST",
+            "description": f"Dispense product from {device.name} (requires payment)",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["dispense"],
+                        "description": "Action to perform"
+                    },
+                    "product_id": {
+                        "type": "string",
+                        "description": "Product ID or name to dispense"
+                    },
+                    "slot": {
+                        "type": "number",
+                        "description": "Slot number (optional)"
+                    }
+                },
+                "required": []
+            },
+            "payment_required": True,
+            "default_amount_eth": "0.003"
+        })
+        capabilities.append({
+            "id": "check_inventory",
+            "endpoint": f"{device_path}/status",
+            "method": "GET",
+            "description": f"Check inventory and available products in {device.name}",
+            "schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            },
+            "payment_required": False
+        })
+        capabilities.append({
+            "id": "restock_product",
+            "endpoint": f"{device_path}/job",
+            "method": "POST",
+            "description": f"Restock product in {device.name} (requires payment)",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["restock"],
+                        "description": "Action to perform"
+                    },
+                    "product_id": {
+                        "type": "string",
+                        "description": "Product ID to restock"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "description": "Quantity to add"
+                    },
+                    "slot": {
+                        "type": "number",
+                        "description": "Slot number"
+                    }
+                },
+                "required": []
+            },
+            "payment_required": True,
+            "default_amount_eth": "0.004"
+        })
     
     manifest = {
         "name": device.name,
@@ -697,6 +768,8 @@ async def execute_device_job(
             "default": "0.005"
         },
         "vending_machine": {
+            "dispense": "0.003",
+            "restock": "0.004",
             "default": "0.003"
         },
         "security_camera": {
@@ -763,44 +836,169 @@ async def execute_device_job(
             "device_status": device.get_detail()
         }
         
-        if device.type == "smart_lock" and hasattr(device, 'is_locked'):
-            device.is_locked = False
-            if hasattr(device, 'last_unlocked_by'):
-                device.last_unlocked_by = tx_hash[:10] + "..."
+        # Execute action based on device type and action
+        if device.type == "smart_lock":
+            if action == "unlock":
+                if hasattr(device, 'is_locked'):
+                    device.is_locked = False
+                if hasattr(device, 'last_unlocked_by'):
+                    device.last_unlocked_by = tx_hash[:10] + "..." if requires_payment else "manual"
+                if hasattr(device, 'auto_lock_timer_sec'):
+                    device.auto_lock_timer_sec = 300  # 5 minutes auto-lock
+                result_data["message"] = f"{device.name} unlocked successfully"
+                logger.info(f"[API] POST /devices/{device_name}/job - Device unlocked")
+            elif action == "lock":
+                if hasattr(device, 'is_locked'):
+                    device.is_locked = True
+                if hasattr(device, 'auto_lock_timer_sec'):
+                    device.auto_lock_timer_sec = 0
+                result_data["message"] = f"{device.name} locked manually"
+                logger.info(f"[API] POST /devices/{device_name}/job - Device locked")
+                
         elif device.type == "3d_printer":
-            # Simulate printing with proof
-            logger.info(f"[API] POST /devices/{device_name}/job - Starting print job")
-            
-            # Generate unique job ID and proof
-            job_id = str(uuid.uuid4())
-            job_proof = hashlib.sha256(f"{job_id}{tx_hash}{device.id}".encode()).hexdigest()[:16]
-            
-            # Generate filename
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            filename = f"print_job_{timestamp}_{job_proof}.gcode"
-            
-            # Update printer state
-            if hasattr(device, 'status'):
-                device.status = "PRINTING"
-            if hasattr(device, 'current_file'):
-                device.current_file = filename
-            if hasattr(device, 'progress_percent'):
-                device.progress_percent = 0.0  # Start at 0%
-            
-            # Add print job proof to response
-            result_data.update({
-                "job_id": job_id,
-                "job_proof": job_proof,
-                "file_name": filename,
-                "message": f"Print job '{filename}' started successfully on {device.name}"
-            })
-            
-            logger.info(f"[API] POST /devices/{device_name}/job - Print job created: {job_id} ({filename})")
+            if action == "print":
+                # Simulate printing with proof
+                logger.info(f"[API] POST /devices/{device_name}/job - Starting print job")
+                
+                # Get file URL from params if provided
+                file_url = job_request.params.get("file_url", "default_document.gcode") if job_request and job_request.params else "default_document.gcode"
+                
+                # Generate unique job ID and proof
+                job_id = str(uuid.uuid4())
+                job_proof = hashlib.sha256(f"{job_id}{tx_hash}{device.id}".encode()).hexdigest()[:16]
+                
+                # Generate filename
+                timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                filename = f"print_job_{timestamp}_{job_proof}.gcode"
+                
+                # Update printer state
+                if hasattr(device, 'status'):
+                    device.status = "PRINTING"
+                if hasattr(device, 'current_file'):
+                    device.current_file = filename
+                if hasattr(device, 'progress_percent'):
+                    device.progress_percent = 0.0  # Start at 0%
+                
+                # Add print job proof to response
+                result_data.update({
+                    "job_id": job_id,
+                    "job_proof": job_proof,
+                    "file_name": filename,
+                    "file_url": file_url,
+                    "message": f"Print job '{filename}' started successfully on {device.name}"
+                })
+                
+                logger.info(f"[API] POST /devices/{device_name}/job - Print job created: {job_id} ({filename})")
+                
+            elif action == "buy_filament":
+                # Simulate filament purchase
+                material_type = job_request.params.get("material_type", "PLA") if job_request and job_request.params else "PLA"
+                color = job_request.params.get("color", "black") if job_request and job_request.params else "black"
+                weight = job_request.params.get("weight_grams", 1000) if job_request and job_request.params else 1000
+                
+                # Generate purchase ID
+                purchase_id = str(uuid.uuid4())
+                purchase_proof = hashlib.sha256(f"{purchase_id}{tx_hash}{device.id}".encode()).hexdigest()[:16]
+                
+                result_data.update({
+                    "purchase_id": purchase_id,
+                    "purchase_proof": purchase_proof,
+                    "material_type": material_type,
+                    "color": color,
+                    "weight_grams": weight,
+                    "message": f"Filament purchase successful: {weight}g of {material_type} ({color}) for {device.name}"
+                })
+                
+                logger.info(f"[API] POST /devices/{device_name}/job - Filament purchased: {purchase_id} ({material_type}, {color}, {weight}g)")
+                
+            elif action == "pause":
+                if hasattr(device, 'status') and device.status == "PRINTING":
+                    device.status = "PAUSED"
+                    result_data["message"] = f"Print job paused on {device.name}"
+                    logger.info(f"[API] POST /devices/{device_name}/job - Print job paused")
+                else:
+                    result_data["message"] = f"No active print job to pause on {device.name}"
+                    logger.warning(f"[API] POST /devices/{device_name}/job - No active print to pause")
+                    
+            elif action == "cancel":
+                if hasattr(device, 'status') and device.status in ["PRINTING", "PAUSED"]:
+                    device.status = "IDLE"
+                    if hasattr(device, 'progress_percent'):
+                        device.progress_percent = 0.0
+                    if hasattr(device, 'current_file'):
+                        device.current_file = None
+                    result_data["message"] = f"Print job cancelled on {device.name}"
+                    logger.info(f"[API] POST /devices/{device_name}/job - Print job cancelled")
+                else:
+                    result_data["message"] = f"No active print job to cancel on {device.name}"
+                    logger.warning(f"[API] POST /devices/{device_name}/job - No active print to cancel")
+                    
         elif device.type == "ev_charger":
-            # Simulate charging start
-            if hasattr(device, 'status'):
-                device.status = "CHARGING"
-            logger.info(f"[API] POST /devices/{device_name}/job - Starting charging session")
+            if action == "charge":
+                # Simulate charging start
+                if hasattr(device, 'status'):
+                    device.status = "CHARGING"
+                if hasattr(device, 'vehicle_connected'):
+                    device.vehicle_connected = True
+                target_percent = job_request.params.get("target_percent", 100) if job_request and job_request.params else 100
+                
+                result_data.update({
+                    "target_percent": target_percent,
+                    "message": f"Charging session started on {device.name} (target: {target_percent}%)"
+                })
+                logger.info(f"[API] POST /devices/{device_name}/job - Starting charging session (target: {target_percent}%)")
+                
+            elif action == "stop":
+                if hasattr(device, 'status') and device.status == "CHARGING":
+                    device.status = "COMPLETE"
+                    if hasattr(device, 'current_power_kw'):
+                        device.current_power_kw = 0.0
+                    result_data["message"] = f"Charging session stopped on {device.name}"
+                    logger.info(f"[API] POST /devices/{device_name}/job - Charging session stopped")
+                else:
+                    result_data["message"] = f"No active charging session to stop on {device.name}"
+                    logger.warning(f"[API] POST /devices/{device_name}/job - No active charging to stop")
+        
+        elif device.type == "vending_machine":
+            if action == "dispense":
+                # Simulate product dispensing
+                product_id = job_request.params.get("product_id", "unknown") if job_request and job_request.params else "unknown"
+                slot = job_request.params.get("slot") if job_request and job_request.params else None
+                
+                # Generate dispense ID
+                dispense_id = str(uuid.uuid4())
+                dispense_proof = hashlib.sha256(f"{dispense_id}{tx_hash}{device.id}".encode()).hexdigest()[:16]
+                
+                result_data.update({
+                    "dispense_id": dispense_id,
+                    "dispense_proof": dispense_proof,
+                    "product_id": product_id,
+                    "slot": slot,
+                    "message": f"Product '{product_id}' dispensed successfully from {device.name}" + (f" (slot {slot})" if slot else "")
+                })
+                
+                logger.info(f"[API] POST /devices/{device_name}/job - Product dispensed: {dispense_id} ({product_id})")
+                
+            elif action == "restock":
+                # Simulate restocking
+                product_id = job_request.params.get("product_id", "unknown") if job_request and job_request.params else "unknown"
+                quantity = job_request.params.get("quantity", 1) if job_request and job_request.params else 1
+                slot = job_request.params.get("slot") if job_request and job_request.params else None
+                
+                # Generate restock ID
+                restock_id = str(uuid.uuid4())
+                restock_proof = hashlib.sha256(f"{restock_id}{tx_hash}{device.id}".encode()).hexdigest()[:16]
+                
+                result_data.update({
+                    "restock_id": restock_id,
+                    "restock_proof": restock_proof,
+                    "product_id": product_id,
+                    "quantity": quantity,
+                    "slot": slot,
+                    "message": f"Restocked {quantity} units of '{product_id}' in {device.name}" + (f" (slot {slot})" if slot else "")
+                })
+                
+                logger.info(f"[API] POST /devices/{device_name}/job - Product restocked: {restock_id} ({product_id}, qty: {quantity})")
         
         device.update()
         

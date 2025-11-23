@@ -4,10 +4,9 @@ import { useState, useEffect } from "react";
 import { useAccount, useWalletClient, usePublicClient, useConnectorClient } from "wagmi";
 import { parseEther } from "viem";
 import { sepolia } from "@/lib/wallet";
-import { CommandInput } from "@/components/CommandInput";
-import { TaskStage } from "@/components/TaskStage";
-import { AgentMessage } from "@/components/AgentMessage";
-import { Sidebar } from "@/components/Sidebar";
+import { CommandPanel } from "@/components/CommandPanel";
+import { DeviceControlGrid } from "@/components/DeviceControlGrid";
+import { ActivityLog } from "@/components/ActivityLog";
 import { WalletButton } from "@/components/WalletButton";
 import { AutonomousModeSetup } from "@/components/AutonomousModeSetup";
 import { useTask } from "@/hooks/useTask";
@@ -49,6 +48,8 @@ export default function Home() {
     taskData,
     history,
     chatMessage,
+    activitySteps,
+    activeDeviceId,
     startTask,
     setParsedIntent,
     setMachine,
@@ -62,6 +63,10 @@ export default function Home() {
     updateChatMessage,
     clearChatMessage,
     reset,
+    addActivityStep,
+    updateActivityStep,
+    clearActivitySteps,
+    setActiveDeviceId,
   } = useTask();
 
   // Listen for authorize payment event
@@ -156,14 +161,24 @@ export default function Home() {
   ]);
 
   const handleExecute = async (command: string) => {
-    // Clear chat message when starting new command
+    // Clear chat message and activity steps when starting new command
     clearChatMessage();
+    clearActivitySteps();
+    setActiveDeviceId(undefined);
 
     // For chat mode, wallet connection is not required
     // For action mode, wallet is required
     try {
       // Step 1: Parse intent
       console.log("[Page] handleExecute - Step 1: Parsing intent for:", command);
+      
+      addActivityStep({
+        id: "parse",
+        status: "running",
+        label: "INTENT_PARSER",
+        message: "Analyzing command...",
+        timestamp: Date.now(),
+      });
       const parseResponse = await fetch("/api/agent/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -181,10 +196,16 @@ export default function Home() {
       const parsedIntent = await parseResponse.json();
       console.log("[Page] handleExecute - Parsed intent:", parsedIntent);
 
+      updateActivityStep("parse", {
+        status: "success",
+        message: `Intent: ${parsedIntent.type === "chat" ? "Chat" : "Action"}`,
+      });
+
       // Check if it's a chat message or an action
       if (parsedIntent.type === "chat") {
         // Chat mode: just show the message
         updateChatMessage(parsedIntent.message || "No response available");
+        clearActivitySteps();
         return;
       }
 
@@ -199,12 +220,28 @@ export default function Home() {
 
       // Step 2: Discover machines (filtered by action if available)
       console.log("[Page] handleExecute - Step 2: Discovering machines");
+      
+      addActivityStep({
+        id: "discovery",
+        status: "running",
+        label: "DISCOVERY",
+        message: "Scanning local peers...",
+        timestamp: Date.now(),
+      });
+      
       // Only resolve the ENS domain that matches the intent (not all of them)
       const machines = await discoverMachines(parsedIntent.action);
       console.log("[Page] handleExecute - Found machines:", machines.length);
       if (machines.length === 0) {
+        updateActivityStep("discovery", { status: "error", message: "No machines found" });
         throw new Error("No machines found for this action");
       }
+      
+      updateActivityStep("discovery", {
+        status: "success",
+        message: `Found ${machines.length} device(s)`,
+        details: `Device: ${machines[0].name || machines[0].ens_domain}`,
+      });
 
       // Select machine (should be only one if filtered by action, but handle multiple)
       let machine = machines[0]; // Default to first
@@ -232,8 +269,24 @@ export default function Home() {
       });
       setMachine(machine);
 
-      // Step 3: Find device FIRST (needed for device-specific manifest)
-      console.log("[Page] handleExecute - Step 3: Finding device");
+      // Step 3: ENS Resolution
+      const ensDomain = machine.ens || machine.ens_domain || "";
+      addActivityStep({
+        id: "ens",
+        status: "running",
+        label: "ENS_RESOLVER",
+        message: `Resolving '${ensDomain}'...`,
+        timestamp: Date.now(),
+      });
+
+      updateActivityStep("ens", {
+        status: "success",
+        message: `Resolved ${ensDomain}`,
+        details: `Address: ${machine.payment_address?.slice(0, 6)}...${machine.payment_address?.slice(-4)} | URL: ${machine.url}`,
+      });
+
+      // Step 4: Find device FIRST (needed for device-specific manifest)
+      console.log("[Page] handleExecute - Step 4: Finding device");
       console.log("[Page] handleExecute - Searching with:", {
         deviceId: parsedIntent.device,
         deviceName: parsedIntent.device,
@@ -253,9 +306,10 @@ export default function Home() {
         );
       }
       setDevice(device);
+      setActiveDeviceId(device.id);
 
-      // Step 4: Discover device-specific capabilities
-      console.log("[Page] handleExecute - Step 4: Discovering device-specific capabilities");
+      // Step 5: Discover device-specific capabilities
+      console.log("[Page] handleExecute - Step 5: Discovering device-specific capabilities");
       const deviceNameForUrl = device.id.replace(/-/g, "_"); // Convert to URL-friendly format
       const manifest = await discoverMachineCapabilities(machine.url, deviceNameForUrl);
       console.log("[Page] handleExecute - Manifest received:", manifest);
@@ -266,8 +320,17 @@ export default function Home() {
       }
       setCapability(capability);
 
-      // Step 5: Execute with payment
-      console.log("[Page] Step 5: Checking autonomous mode before execution:", {
+      // Step 6: Execute with payment
+      addActivityStep({
+        id: "handshake",
+        status: "running",
+        label: "HANDSHAKE",
+        message: `POST /devices/${device.id.replace(/-/g, "_")}/job...`,
+        details: `Payload: { action: "${parsedIntent.action}", device_id: "${device.id}" }`,
+        timestamp: Date.now(),
+      });
+
+      console.log("[Page] Step 6: Checking autonomous mode before execution:", {
         enabled: autonomousConfig.enabled,
         allowanceGranted: autonomousConfig.allowanceGranted,
         hasWalletClient: !!walletClient,
@@ -349,10 +412,22 @@ export default function Home() {
       );
 
       if (result.success) {
+        updateActivityStep("handshake", {
+          status: "success",
+          message: "Action executed successfully",
+        });
         completeTask(result.data);
+        setActiveDeviceId(undefined);
       } else if (result.paymentDetails) {
         // Payment amount is already in ETH
         const amountEth = parseFloat(result.paymentDetails.amount);
+        
+        updateActivityStep("handshake", {
+          status: "payment_required",
+          label: "x402 PAYWALL",
+          message: "402 Payment Required",
+          details: `Cost: ${result.paymentDetails.amount} ETH`,
+        });
         
         console.log("[Page] Payment required - Checking autonomous mode:", {
           enabled: autonomousConfig.enabled,
@@ -398,14 +473,33 @@ export default function Home() {
             recordPayment(amountEth);
             setTxHash(hash);
             
+            addActivityStep({
+              id: "payment",
+              status: "running",
+              label: "PAYMENT",
+              message: "Signing transaction...",
+              details: `Amount: ${amountETHStr} ETH`,
+              timestamp: Date.now(),
+            });
+            
             // Wait for transaction confirmation
             console.log("[Page] Waiting for transaction confirmation...");
             await publicClient.waitForTransactionReceipt({ hash });
             console.log("[Page] Transaction confirmed");
             
+            updateActivityStep("payment", {
+              status: "success",
+              message: "Transaction confirmed",
+              details: `TX: ${hash.slice(0, 10)}...${hash.slice(-8)}`,
+              txHash: hash, // Store full hash for Etherscan link
+            });
+            
             // Retry with payment proof
             console.log("[Page] Payment confirmed, retrying action with payment proof");
-            // State is already "executing" from startExecution(), no need to set again
+            updateActivityStep("handshake", {
+              status: "running",
+              message: "Retrying with payment proof...",
+            });
             
             // Use device name in URL-friendly format for the endpoint
             const deviceNameForUrl = device.id.replace(/-/g, "_");
@@ -421,7 +515,12 @@ export default function Home() {
             );
             
             console.log("[Page] Action completed successfully:", retryResult);
+            updateActivityStep("handshake", {
+              status: "success",
+              message: "Action executed successfully",
+            });
             completeTask(retryResult);
+            setActiveDeviceId(undefined);
           } catch (paymentError: any) {
             const errorMessage = paymentError?.message || paymentError?.toString() || JSON.stringify(paymentError) || "Payment failed";
             console.error("[Page] Auto-payment failed:", {
@@ -465,60 +564,77 @@ export default function Home() {
       }
       
       setError(error.message || "Task execution failed");
+      setActiveDeviceId(undefined);
     }
   };
 
-  const quickActions = [
-    { icon: Lock, label: "Desbloquear dispositivo", command: "Desbloquear smart lock" },
-    { icon: Printer, label: "Imprimir documento", command: "Imprimir en Lab 3" },
-    { icon: Zap, label: "Cargar vehículo", command: "Cargar en estación 1" },
-  ];
+  const handleDeviceAction = async (deviceId: string, action: string, params?: Record<string, any>) => {
+    // Build command from device action
+    const actionCommands: Record<string, string> = {
+      print: `Imprimir en ${deviceId}`,
+      unlock: `Desbloquear ${deviceId}`,
+      charge: `Cargar en ${deviceId}`,
+      buy_filament: `Comprar filamento para ${deviceId}`,
+      pause: `Pausar impresión en ${deviceId}`,
+      cancel: `Cancelar impresión en ${deviceId}`,
+      stop: `Detener carga en ${deviceId}`,
+      lock: `Bloquear ${deviceId}`,
+      dispense: `Dispensar producto de ${deviceId}`,
+      restock: `Reabastecer ${deviceId}`,
+    };
+    
+    const command = actionCommands[action] || `${action} ${deviceId}`;
+    await handleExecute(command);
+  };
 
   return (
-    <div className="min-h-screen bg-[#030303] text-white selection:bg-indigo-500/30 overflow-hidden">
-      {/* Breathing Void - Luz ambiental */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px] opacity-50 animate-pulse" 
-             style={{ animationDuration: '4s' }} />
-        <div className="absolute top-1/4 right-1/4 w-[300px] h-[300px] bg-purple-600/10 rounded-full blur-[100px] opacity-30" />
-      </div>
-
-      {/* Wallet Identity Pill - Top Right */}
-      <div className="fixed top-6 right-6 z-50 flex items-center gap-3">
-        {mounted && !autonomousLoading && isConnected && (
-          <>
-            {autonomousConfig.enabled ? (
-              <div className="flex items-center gap-2">
-                <div className="px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-lg text-xs text-green-300 flex items-center gap-2">
-                  <Zap size={12} className="fill-green-400" />
-                  <span className="hidden sm:inline">
-                    Agente: {autonomousConfig.dailySpent.toFixed(4)}/{autonomousConfig.dailyLimit} ETH
-                  </span>
-                  <span className="sm:hidden">Agente</span>
+    <div className="h-screen bg-zinc-950 text-white overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="h-14 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between px-6">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            <span className="text-xs font-mono text-zinc-400 uppercase tracking-wider">
+              System: ONLINE
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {mounted && !autonomousLoading && isConnected && (
+            <>
+              {autonomousConfig.enabled ? (
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-1.5 bg-success/20 border border-success/30 rounded text-xs text-success font-mono flex items-center gap-2">
+                    <Zap size={12} className="fill-success" />
+                    <span className="hidden sm:inline">
+                      {autonomousConfig.dailySpent.toFixed(4)}/{autonomousConfig.dailyLimit} ETH
+                    </span>
+                    <span className="sm:hidden">Agent</span>
+                  </div>
+                  <button
+                    onClick={() => setShowAutonomousSetup(true)}
+                    className="px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-400 hover:text-zinc-300 transition-colors font-mono"
+                    title="Configure"
+                  >
+                    ⚙
+                  </button>
                 </div>
-                {/* Debug: Quick reset button */}
+              ) : (
                 <button
                   onClick={() => setShowAutonomousSetup(true)}
-                  className="px-2 py-1.5 bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-600/30 rounded-lg text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
-                  title="🛠️ Debug: Configurar/Resetear"
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-300 hover:text-white transition-colors font-mono flex items-center gap-2"
+                  title="Enable Autonomous Mode"
                 >
-                  ⚙️
+                  <Zap size={12} />
+                  <span className="hidden sm:inline">Activate Agent</span>
+                  <span className="sm:hidden">Agent</span>
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAutonomousSetup(true)}
-                className="px-4 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 rounded-xl text-sm text-indigo-300 hover:text-indigo-200 transition-colors flex items-center gap-2"
-                title="Habilitar pagos automáticos"
-              >
-                <Zap size={14} />
-                <span className="hidden sm:inline">Activar Agente</span>
-                <span className="sm:hidden">Agente</span>
-              </button>
-            )}
-          </>
-        )}
-        <WalletButton />
+              )}
+            </>
+          )}
+          <WalletButton />
+        </div>
       </div>
 
       {/* Autonomous Mode Setup Modal */}
@@ -527,7 +643,6 @@ export default function Home() {
           onSetupComplete={() => {
             setShowAutonomousSetup(false);
             setNeedsAutonomousSetup(false);
-            // Retry the last action if it failed due to missing setup
             if (needsAutonomousSetup && taskData?.intent) {
               handleExecute(taskData.intent);
             }
@@ -539,66 +654,40 @@ export default function Home() {
         />
       )}
 
-      {/* Content */}
-      <div className="relative z-10 flex h-screen">
-        <Sidebar
-          history={history}
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-        />
-
-        <main className="flex-1 flex flex-col lg:ml-20 xl:ml-20">
-          {/* Main Content */}
-          <div className="flex-1 flex items-center justify-center p-8">
-            {chatMessage ? (
-              <AgentMessage message={chatMessage} />
-            ) : state === "idle" ? (
-              <div className="w-full max-w-3xl">
-                {/* Quick Actions */}
-                <div className="flex flex-wrap gap-4 justify-center mb-12">
-                  {quickActions.map((action, idx) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => handleExecute(action.command)}
-                        disabled={!mounted || !isConnected}
-                        className="group flex items-center gap-3 px-5 py-3 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-2xl transition-all duration-300 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <div className="p-2 rounded-lg bg-black/50 text-zinc-400 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 transition-colors">
-                          <Icon size={18} strokeWidth={2} />
-                        </div>
-                        <span className="text-sm font-medium text-zinc-300 group-hover:text-white tracking-wide">
-                          {action.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <TaskStage state={state} taskData={taskData} />
-            )}
-          </div>
-
-          {/* Command Input - God Bar */}
-          <CommandInput
+      {/* Split View Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel: Command Interface (30-40%) */}
+        <div className="w-full md:w-[35%] lg:w-[40%] flex flex-col border-r border-zinc-800">
+          <CommandPanel
             onExecute={handleExecute}
+            chatMessage={chatMessage || undefined}
+            history={history}
             disabled={Boolean(state !== "idle" && state !== "success" && state !== "error" && !chatMessage)}
           />
           
-          {/* Reset button after success/error */}
-          {(state === "success" || state === "error") && (
-            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-30">
-              <button
-                onClick={reset}
-                className="px-5 py-2.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl hover:bg-white/20 hover:border-indigo-500/50 transition-all text-sm font-medium text-zinc-300 hover:text-white"
-              >
-                Nueva Tarea
-              </button>
+          {/* Activity Log - Shows below command panel when active */}
+          {activitySteps.length > 0 && (
+            <div className="border-t border-zinc-800 p-4 bg-zinc-900/50">
+              <ActivityLog
+                steps={activitySteps}
+                onSignTransaction={() => {
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("authorize-payment"));
+                  }
+                }}
+                isAutoSigning={autonomousConfig.enabled && state === "executing"}
+              />
             </div>
           )}
-        </main>
+        </div>
+
+        {/* Right Panel: Device Grid (60-70%) */}
+        <div className="flex-1 overflow-hidden">
+          <DeviceControlGrid
+            activeDeviceId={activeDeviceId}
+            onDeviceAction={handleDeviceAction}
+          />
+        </div>
       </div>
     </div>
   );

@@ -95,3 +95,30 @@ export interface TaskHistory {
   device?: string;
 }
 
+export interface ActivityStep {
+  id: string;
+  status: 'pending' | 'running' | 'success' | 'error' | 'payment_required';
+  label: string;
+  message: string;
+  details?: string;
+  timestamp: number;
+  txHash?: string; // Transaction hash for blockchain explorer links
+}
+
+export interface DeviceDetail {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  telemetry: Record<string, any>;
+  ens_domain: string;
+  capabilities?: Capability[];
+  payment_config?: {
+    chainId: number;
+    chainName: string;
+    token: string;
+    recipient: string;
+    rpcUrl: string;
+  };
+}
+

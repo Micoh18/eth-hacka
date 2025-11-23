@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { TaskState, TaskData, TaskHistory, Machine, Capability, Device, ParsedIntent } from "@/types";
+import type { TaskState, TaskData, TaskHistory, Machine, Capability, Device, ParsedIntent, ActivityStep } from "@/types";
 
 export function useTask() {
   const [state, setState] = useState<TaskState>("idle");
   const [taskData, setTaskData] = useState<TaskData | null>(null);
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [chatMessage, setChatMessage] = useState<string | null>(null);
+  const [activitySteps, setActivitySteps] = useState<ActivityStep[]>([]);
+  const [activeDeviceId, setActiveDeviceId] = useState<string | undefined>(undefined);
 
   const startTask = useCallback((intent: string) => {
     const newTask: TaskData = {
@@ -90,6 +92,22 @@ export function useTask() {
     setState("idle");
     setTaskData(null);
     setChatMessage(null);
+    setActivitySteps([]);
+    setActiveDeviceId(undefined);
+  }, []);
+
+  const addActivityStep = useCallback((step: ActivityStep) => {
+    setActivitySteps((prev) => [...prev, step]);
+  }, []);
+
+  const updateActivityStep = useCallback((id: string, updates: Partial<ActivityStep>) => {
+    setActivitySteps((prev) =>
+      prev.map((step) => (step.id === id ? { ...step, ...updates } : step))
+    );
+  }, []);
+
+  const clearActivitySteps = useCallback(() => {
+    setActivitySteps([]);
   }, []);
 
   return {
@@ -97,6 +115,8 @@ export function useTask() {
     taskData,
     history,
     chatMessage,
+    activitySteps,
+    activeDeviceId,
     startTask,
     setParsedIntent,
     setMachine,
@@ -110,6 +130,10 @@ export function useTask() {
     updateChatMessage,
     clearChatMessage,
     reset,
+    addActivityStep,
+    updateActivityStep,
+    clearActivitySteps,
+    setActiveDeviceId,
   };
 }
 

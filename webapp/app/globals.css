@@ -3,17 +3,30 @@
 @tailwind utilities;
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --background: #F9FAFB;
-  --foreground: #09090B;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090B;
-    --foreground: #F9FAFB;
-  }
+  --background: #09090B;
+  --foreground: #F9FAFB;
+  
+  /* Technical Color Palette - Industrial Dark Mode */
+  --color-system: #3B82F6;      /* Blue - System processes */
+  --color-warning: #F59E0B;      /* Amber - Payment required */
+  --color-success: #10B981;      /* Green - Success/Active */
+  --color-error: #EF4444;        /* Red - Errors */
+  
+  /* Slate/Zinc grays (cold) */
+  --color-zinc-50: #FAFAFA;
+  --color-zinc-100: #F4F4F5;
+  --color-zinc-200: #E4E4E7;
+  --color-zinc-300: #D4D4D8;
+  --color-zinc-400: #A1A1AA;
+  --color-zinc-500: #71717A;
+  --color-zinc-600: #52525B;
+  --color-zinc-700: #3F3F46;
+  --color-zinc-800: #27272A;
+  --color-zinc-900: #18181B;
+  --color-zinc-950: #09090B;
 }
 
 body {
@@ -30,6 +43,60 @@ body {
   
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+  
+  /* Mono font utility for technical data */
+  .font-mono {
+    font-family: 'JetBrains Mono', 'Roboto Mono', 'Courier New', monospace;
+  }
+  
+  /* Semantic color utilities */
+  .text-system {
+    color: var(--color-system);
+  }
+  
+  .text-warning {
+    color: var(--color-warning);
+  }
+  
+  .text-success {
+    color: var(--color-success);
+  }
+  
+  .text-error {
+    color: var(--color-error);
+  }
+  
+  .bg-system {
+    background-color: var(--color-system);
+  }
+  
+  .bg-warning {
+    background-color: var(--color-warning);
+  }
+  
+  .bg-success {
+    background-color: var(--color-success);
+  }
+  
+  .bg-error {
+    background-color: var(--color-error);
+  }
+  
+  .border-system {
+    border-color: var(--color-system);
+  }
+  
+  .border-warning {
+    border-color: var(--color-warning);
+  }
+  
+  .border-success {
+    border-color: var(--color-success);
+  }
+  
+  .border-error {
+    border-color: var(--color-error);
   }
 }
 
