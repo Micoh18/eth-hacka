@@ -6,22 +6,3 @@ services:
       - "8000:8000"
     restart: unless-stopped
 
-  seller-agent:
-    build: ./agents
-    container_name: seller-agent
-    restart: unless-stopped
-    command: npm run start:seller
-    env_file:
-      - .env
-    depends_on:
-      - iot-api
-
-  buyer-agent:
-    build: ./agents
-    container_name: buyer-agent
-    restart: unless-stopped
-    command: npm run start:buyer
-    env_file:
-      - .env
-    depends_on:
-      - iot-api

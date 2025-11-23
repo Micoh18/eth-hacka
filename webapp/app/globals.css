@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --background: #F9FAFB;
+  --foreground: #09090B;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090B;
+    --foreground: #F9FAFB;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+

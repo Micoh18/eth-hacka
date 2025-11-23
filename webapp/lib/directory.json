@@ -1,0 +1,8 @@
+[
+  {
+    "name": "IoT Device Simulator",
+    "url": "http://localhost:8000",
+    "description": "Local IoT device simulator with smart locks, printers, and more"
+  }
+]
+

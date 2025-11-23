@@ -1,0 +1,8 @@
+# Agent Assistant Configuration
+# buyer-agent: 0x495B29117Ee2D250f58D7E1726F32dE91286B9e3
+
+WALLET_KEY=0x16ce06506611e54a20f0f07ae00527c7643b1d6792ad7c33e91a3435a709483f
+MACHINE_API_URL=http://localhost:8000
+MAX_AUTO_PAY_AMOUNT=0.05
+RPC_URL=https://sepolia.base.org
+
