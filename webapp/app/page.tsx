@@ -197,17 +197,39 @@ export default function Home() {
       startTask(command);
       setParsedIntent(parsedIntent);
 
-      // Step 2: Discover machines
+      // Step 2: Discover machines (filtered by action if available)
       console.log("[Page] handleExecute - Step 2: Discovering machines");
-      const machines = await discoverMachines();
+      // Only resolve the ENS domain that matches the intent (not all of them)
+      const machines = await discoverMachines(parsedIntent.action);
       console.log("[Page] handleExecute - Found machines:", machines.length);
       if (machines.length === 0) {
-        throw new Error("No machines found");
+        throw new Error("No machines found for this action");
       }
 
-      // For now, use first machine (can be enhanced with matching logic)
-      const machine = machines[0];
-      console.log("[Page] handleExecute - Using machine:", machine.url);
+      // Select machine (should be only one if filtered by action, but handle multiple)
+      let machine = machines[0]; // Default to first
+      
+      // If multiple machines found, try to match by device name
+      if (machines.length > 1 && parsedIntent.device) {
+        const searchTerm = parsedIntent.device.toLowerCase();
+        const matched = machines.find(m => 
+          m.name?.toLowerCase().includes(searchTerm) ||
+          m.ens?.toLowerCase().includes(searchTerm) ||
+          m.ens_domain?.toLowerCase().includes(searchTerm) ||
+          searchTerm.includes(m.name?.toLowerCase() || "")
+        );
+        if (matched) {
+          machine = matched;
+          console.log("[Page] handleExecute - Matched machine by device name:", machine.name);
+        }
+      }
+      
+      console.log("[Page] handleExecute - Using machine:", {
+        name: machine.name,
+        url: machine.url,
+        ens: machine.ens || machine.ens_domain,
+        action: parsedIntent.action,
+      });
       setMachine(machine);
 
       // Step 3: Find device FIRST (needed for device-specific manifest)

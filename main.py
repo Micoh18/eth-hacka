@@ -416,11 +416,47 @@ async def get_device_manifest(device_name: str):
             "description": f"Unlock {device.name} (requires payment)",
             "schema": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["unlock"],
+                        "description": "Action to perform"
+                    }
+                },
                 "required": []
             },
             "payment_required": True,
             "default_amount_eth": "0.001"
+        })
+        capabilities.append({
+            "id": "lock_device",
+            "endpoint": f"{device_path}/job",
+            "method": "POST",
+            "description": f"Lock {device.name} manually",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["lock"],
+                        "description": "Action to perform"
+                    }
+                },
+                "required": []
+            },
+            "payment_required": False
+        })
+        capabilities.append({
+            "id": "check_access_log",
+            "endpoint": f"{device_path}/status",
+            "method": "GET",
+            "description": f"Get access log and history for {device.name}",
+            "schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            },
+            "payment_required": False
         })
     elif device.type == "3d_printer":
         capabilities.append({
@@ -431,6 +467,11 @@ async def get_device_manifest(device_name: str):
             "schema": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["print"],
+                        "description": "Action to perform"
+                    },
                     "file_url": {
                         "type": "string",
                         "description": "URL of the file to print"
@@ -441,6 +482,74 @@ async def get_device_manifest(device_name: str):
             "payment_required": True,
             "default_amount_eth": "0.002"
         })
+        capabilities.append({
+            "id": "buy_filament",
+            "endpoint": f"{device_path}/job",
+            "method": "POST",
+            "description": f"Purchase filament/material for {device.name} (requires payment)",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["buy_filament"],
+                        "description": "Action to perform"
+                    },
+                    "material_type": {
+                        "type": "string",
+                        "enum": ["PLA", "ABS", "PETG", "TPU"],
+                        "description": "Type of filament material"
+                    },
+                    "color": {
+                        "type": "string",
+                        "description": "Color of the filament (e.g., 'black', 'white', 'red')"
+                    },
+                    "weight_grams": {
+                        "type": "number",
+                        "description": "Weight in grams (default: 1000g spool)"
+                    }
+                },
+                "required": []
+            },
+            "payment_required": True,
+            "default_amount_eth": "0.003"
+        })
+        capabilities.append({
+            "id": "pause_print",
+            "endpoint": f"{device_path}/job",
+            "method": "POST",
+            "description": f"Pause current print job on {device.name}",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["pause"],
+                        "description": "Action to perform"
+                    }
+                },
+                "required": []
+            },
+            "payment_required": False
+        })
+        capabilities.append({
+            "id": "cancel_print",
+            "endpoint": f"{device_path}/job",
+            "method": "POST",
+            "description": f"Cancel current print job on {device.name}",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["cancel"],
+                        "description": "Action to perform"
+                    }
+                },
+                "required": []
+            },
+            "payment_required": False
+        })
     elif device.type == "ev_charger":
         capabilities.append({
             "id": "charge_vehicle",
@@ -449,11 +558,51 @@ async def get_device_manifest(device_name: str):
             "description": f"Start charging session at {device.name} (requires payment)",
             "schema": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["charge"],
+                        "description": "Action to perform"
+                    },
+                    "target_percent": {
+                        "type": "number",
+                        "description": "Target battery percentage (default: 100%)"
+                    }
+                },
                 "required": []
             },
             "payment_required": True,
             "default_amount_eth": "0.005"
+        })
+        capabilities.append({
+            "id": "stop_charging",
+            "endpoint": f"{device_path}/job",
+            "method": "POST",
+            "description": f"Stop current charging session at {device.name}",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["stop"],
+                        "description": "Action to perform"
+                    }
+                },
+                "required": []
+            },
+            "payment_required": False
+        })
+        capabilities.append({
+            "id": "check_availability",
+            "endpoint": f"{device_path}/status",
+            "method": "GET",
+            "description": f"Check availability and current status of {device.name}",
+            "schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            },
+            "payment_required": False
         })
     
     manifest = {
@@ -525,21 +674,44 @@ async def execute_device_job(
         logger.warning(f"[API] POST /devices/{device_name}/job - Device not found")
         raise HTTPException(status_code=404, detail=f"Device '{device_name}' not found")
     
-    # Determine action and payment amount based on device type
+    # Determine action and payment amount based on device type and action
     action = job_request.action if job_request and job_request.action else "default"
-    default_amounts = {
-        "smart_lock": "0.001",
-        "3d_printer": "0.002",
-        "ev_charger": "0.005",
-        "vending_machine": "0.003",
-        "security_camera": "0.001"
-    }
-    amount = default_amounts.get(device.type, "0.001")
     
-    # Check if payment proof is provided
-    if not authorization:
+    # Action-specific pricing
+    action_amounts = {
+        "smart_lock": {
+            "unlock": "0.001",
+            "lock": "0",  # Free
+            "default": "0.001"
+        },
+        "3d_printer": {
+            "print": "0.002",
+            "buy_filament": "0.003",
+            "pause": "0",  # Free
+            "cancel": "0",  # Free
+            "default": "0.002"
+        },
+        "ev_charger": {
+            "charge": "0.005",
+            "stop": "0",  # Free
+            "default": "0.005"
+        },
+        "vending_machine": {
+            "default": "0.003"
+        },
+        "security_camera": {
+            "default": "0.001"
+        }
+    }
+    
+    device_actions = action_amounts.get(device.type, {})
+    amount = device_actions.get(action, device_actions.get("default", "0.001"))
+    requires_payment = amount != "0"
+    
+    # Check if payment proof is provided (only for paid actions)
+    if requires_payment and not authorization:
         # Step 1: Return 402 Payment Required (x402 protocol)
-        logger.info(f"[API] POST /devices/{device_name}/job - No authorization, returning 402 Payment Required")
+        logger.info(f"[API] POST /devices/{device_name}/job - No authorization, returning 402 Payment Required for action: {action}")
         raise HTTPException(
             status_code=402,
             detail={
@@ -555,17 +727,29 @@ async def execute_device_job(
             }
         )
     
-    # Step 2: Verify payment (authorization header contains transaction hash)
-    tx_hash = authorization.replace("Bearer ", "").strip()
-    logger.info(f"[API] POST /devices/{device_name}/job - Verifying payment with tx_hash: {tx_hash[:20]}...")
+    # For free actions, skip payment verification
+    if not requires_payment:
+        logger.info(f"[API] POST /devices/{device_name}/job - Free action '{action}', skipping payment verification")
+        tx_hash = authorization.replace("Bearer ", "").strip() if authorization else "free_action"
+    else:
+        # Step 2: Verify payment (authorization header contains transaction hash)
+        tx_hash = authorization.replace("Bearer ", "").strip() if authorization else None
+        if not tx_hash:
+            raise HTTPException(
+                status_code=401,
+                detail="Payment proof required for paid actions"
+            )
     
-    # Validate transaction hash format
-    if not tx_hash.startswith("0x") or len(tx_hash) != 66:
-        logger.warning(f"[API] POST /devices/{device_name}/job - Invalid tx_hash format")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid payment proof. Transaction hash must be a valid hex string (0x...)"
-        )
+    # Validate transaction hash format (only for paid actions)
+    if requires_payment:
+        logger.info(f"[API] POST /devices/{device_name}/job - Verifying payment with tx_hash: {tx_hash[:20]}...")
+        
+        if not tx_hash.startswith("0x") or len(tx_hash) != 66:
+            logger.warning(f"[API] POST /devices/{device_name}/job - Invalid tx_hash format")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid payment proof. Transaction hash must be a valid hex string (0x...)"
+            )
     
     # Execute device-specific action
     try:

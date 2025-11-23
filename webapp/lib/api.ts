@@ -72,6 +72,47 @@ export async function getDevices(machineUrl: string) {
   }
 }
 
+/**
+ * Resolve ENS domain to seller agent URL and payment address
+ * This is the only way the buyer agent discovers seller agents
+ */
+export async function resolveENS(ensDomain: string, resolverUrl?: string): Promise<{
+  url: string;
+  payment_address: string;
+  device_id: string;
+  device_name: string;
+  ens_domain: string;
+}> {
+  // Use resolver URL from env or default to API base URL
+  const resolver = resolverUrl || process.env.NEXT_PUBLIC_ENS_RESOLVER_URL || MACHINE_API_URL;
+  
+  // Normalize ENS domain (remove .eth if present)
+  const normalized = ensDomain.replace(/\.eth$/, "");
+  const url = `${resolver}/resolve/${normalized}`;
+  
+  console.log("[API Client] resolveENS - Resolving:", ensDomain, "→", url);
+  
+  try {
+    const response = await axios.get(url, {
+      timeout: 30000,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    
+    console.log("[API Client] resolveENS - Resolved:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error("[API Client] resolveENS - Error:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url
+    });
+    throw new Error(`Failed to resolve ENS domain ${ensDomain}: ${error.message}`);
+  }
+}
+
 export async function executeAction(
   machineUrl: string,
   endpoint: string,

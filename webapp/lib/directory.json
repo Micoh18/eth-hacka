@@ -1,8 +1,23 @@
 [
   {
-    "name": "IoT Device Simulator",
-    "url": "http://localhost:8000",
-    "description": "Local IoT device simulator with smart locks, printers, and more"
+    "id": "printer",
+    "name": "Impresora 3D Lab",
+    "ens": "3dprinter.eth",
+    "icon": "Printer",
+    "description": "Impresión de prototipos plásticos"
+  },
+  {
+    "id": "charger",
+    "name": "Tesla Supercharger",
+    "ens": "evcharger.eth",
+    "icon": "Zap",
+    "description": "Carga rápida nivel 3"
+  },
+  {
+    "id": "lock",
+    "name": "Puerta Principal",
+    "ens": "smartlock.eth",
+    "icon": "Lock",
+    "description": "Acceso a Sala 402"
   }
 ]
-

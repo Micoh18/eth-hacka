@@ -1,9 +1,16 @@
 export type TaskState = "idle" | "scanning" | "quote" | "executing" | "success" | "error";
 
 export interface Machine {
+  id?: string;
   name: string;
-  url: string;
+  url?: string;
   description: string;
+  ens?: string; // ENS domain (e.g., "3dprinter.eth")
+  ens_domain?: string; // Alternative field name
+  icon?: string; // Icon name for UI
+  payment_address?: string; // Payment address from ENS resolution
+  device_id?: string; // Device ID from ENS resolution
+  device_name?: string; // Device name for URLs
 }
 
 export interface Capability {

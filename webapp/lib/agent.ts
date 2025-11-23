@@ -1,13 +1,93 @@
-import { getManifest, getDevices, executeAction, getDeviceManifest } from "./api";
+import { getManifest, getDevices, executeAction, getDeviceManifest, resolveENS } from "./api";
 import { SellerAgent } from "./seller-agent";
 import type { Machine, Capability, Device, ParsedIntent, PaymentDetails } from "@/types";
 import directoryData from "./directory.json";
 
 const directory = directoryData as Machine[];
 
-export async function discoverMachines(): Promise<Machine[]> {
-  // Read from directory.json (simulates network discovery)
-  return directory as Machine[];
+/**
+ * Discover machines by resolving ENS domains from directory.json
+ * Buyer agent only knows ENS, not direct URLs
+ * 
+ * @param filterAction - Optional action type to filter machines (e.g., "print", "unlock")
+ */
+export async function discoverMachines(filterAction?: string): Promise<Machine[]> {
+  console.log("[Agent] discoverMachines - Resolving ENS domains from directory:", directory.length, filterAction ? `(filtered by action: ${filterAction})` : "");
+  
+  // Map actions to device types for filtering
+  const actionToDeviceType: Record<string, string> = {
+    print: "3d_printer",
+    unlock: "smart_lock",
+    charge: "ev_charger",
+    dispense: "vending_machine",
+    capture: "security_camera",
+  };
+  
+  // Map device types to directory IDs
+  const deviceTypeToDirectoryId: Record<string, string> = {
+    "3d_printer": "printer",
+    "smart_lock": "lock",
+    "ev_charger": "charger",
+    "vending_machine": "vending",
+    "security_camera": "camera",
+  };
+  
+  // Filter directory entries if action is provided
+  let entriesToResolve = directory;
+  if (filterAction) {
+    const targetDeviceType = actionToDeviceType[filterAction];
+    if (targetDeviceType) {
+      const targetId = deviceTypeToDirectoryId[targetDeviceType];
+      entriesToResolve = directory.filter(entry => entry.id === targetId);
+      console.log("[Agent] discoverMachines - Filtered to:", entriesToResolve.length, "entry/entries for action:", filterAction);
+    }
+  }
+  
+  const machines: Machine[] = [];
+  
+  for (const entry of entriesToResolve) {
+    // If entry has ENS domain, resolve it
+    const ensDomain = entry.ens || entry.ens_domain;
+    
+    if (ensDomain) {
+      try {
+        console.log("[Agent] discoverMachines - Resolving ENS:", ensDomain);
+        // Resolve ENS to get seller agent URL and device info
+        const resolved = await resolveENS(ensDomain);
+        
+        machines.push({
+          id: entry.id,
+          name: entry.name || resolved.device_name,
+          url: resolved.url.split('/devices/')[0], // Base URL (seller agent)
+          description: entry.description,
+          ens: ensDomain,
+          ens_domain: resolved.ens_domain,
+          payment_address: resolved.payment_address,
+          device_id: resolved.device_id,
+          device_name: resolved.device_name,
+          icon: entry.icon,
+        });
+        
+        console.log("[Agent] discoverMachines - Resolved:", ensDomain, "→", resolved.url);
+      } catch (error: any) {
+        console.error(`[Agent] discoverMachines - Failed to resolve ${ensDomain}:`, error.message);
+        // Continue with other ENS domains, but log the error
+      }
+    } else if (entry.url) {
+      // Fallback: if no ENS but has URL, use it directly (legacy support)
+      console.log("[Agent] discoverMachines - Using direct URL (no ENS):", entry.url);
+      machines.push({
+        id: entry.id,
+        name: entry.name,
+        url: entry.url,
+        description: entry.description,
+        icon: entry.icon,
+      });
+    }
+  }
+  
+  console.log("[Agent] discoverMachines - Found machines:", machines.length);
+  return machines;
 }
 
 /**
