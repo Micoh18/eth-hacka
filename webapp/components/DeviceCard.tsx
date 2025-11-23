@@ -72,6 +72,11 @@ export function DeviceCard({ device, isActive, onAction }: DeviceCardProps) {
 
         {/* Telemetry Badges */}
         <div className="flex flex-wrap gap-2">
+          {device.type === "vending_machine" && device.telemetry?.stock_percent !== undefined && (
+            <div className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs font-mono text-zinc-300">
+              STOCK: {device.telemetry.stock_percent}%
+            </div>
+          )}
           {device.telemetry?.temperature && (
             <div className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs font-mono text-zinc-300">
               {device.telemetry.temperature}°C
@@ -107,64 +112,75 @@ export function DeviceCard({ device, isActive, onAction }: DeviceCardProps) {
                 ? capability.default_amount_eth || "0.001"
                 : "FREE";
               
+              // Extract action from capability id
+              const action = capability.id.includes("print")
+                ? "print"
+                : capability.id.includes("unlock")
+                ? "unlock"
+                : capability.id.includes("charge")
+                ? "charge"
+                : capability.id.includes("buy")
+                ? "buy_filament"
+                : capability.id.includes("pause")
+                ? "pause"
+                : capability.id.includes("cancel")
+                ? "cancel"
+                : capability.id.includes("stop")
+                ? "stop"
+                : capability.id.includes("lock")
+                ? "lock"
+                : capability.id.includes("dispense")
+                ? "dispense"
+                : capability.id.includes("restock")
+                ? "restock"
+                : "default";
+              
+              // Button text based on action
+              const buttonText = action === "dispense" ? "COMPRAR" :
+                                action === "restock" ? "REFILL" :
+                                action === "print" ? "PRINT" :
+                                action === "unlock" ? "UNLOCK" :
+                                action === "charge" ? "CHARGE" :
+                                action === "buy_filament" ? "BUY" :
+                                "RUN";
+              
               return (
                 <div
                   key={capability.id}
-                  className="group flex items-center gap-3 px-3 py-2 bg-zinc-950/50 border border-zinc-800 rounded hover:border-zinc-700 hover:bg-zinc-900/50 transition-all"
+                  className="group grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 bg-zinc-950/50 border border-zinc-800 rounded hover:border-zinc-700 hover:bg-zinc-900/50 transition-all"
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-mono text-zinc-300 truncate">
-                        {capability.id}
-                      </span>
-                      <span className="text-xs text-zinc-600 font-mono">
-                        {capability.method}
-                      </span>
-                    </div>
-                    <div className="text-xs text-zinc-500 truncate">
-                      {capability.description}
-                    </div>
+                  {/* Columna 1: Nombre y Método (Vertical Stack) */}
+                  <div className="flex flex-col min-w-0">
+                    <span 
+                      className="text-xs font-mono text-zinc-200 font-medium"
+                      title={capability.id}
+                    >
+                      {capability.id}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono font-bold tracking-wider uppercase">
+                      {capability.method}
+                    </span>
                   </div>
                   
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-zinc-400 tabular-nums whitespace-nowrap">
-                      {cost}
-                    </span>
-                    <button
-                      onClick={() => {
-                        // Extract action from capability id or use default
-                        const action = capability.id.includes("print")
-                          ? "print"
-                          : capability.id.includes("unlock")
-                          ? "unlock"
-                          : capability.id.includes("charge")
-                          ? "charge"
-                          : capability.id.includes("buy")
-                          ? "buy_filament"
-                          : capability.id.includes("pause")
-                          ? "pause"
-                          : capability.id.includes("cancel")
-                          ? "cancel"
-                          : capability.id.includes("stop")
-                          ? "stop"
-                          : capability.id.includes("lock")
-                          ? "lock"
-                          : capability.id.includes("dispense")
-                          ? "dispense"
-                          : capability.id.includes("restock")
-                          ? "restock"
-                          : "default";
-                        
-                        onAction(action, {
-                          device_id: device.id,
-                          device_name: device.id.replace(/-/g, "_"),
-                        });
-                      }}
-                      className="px-3 py-1 text-xs font-mono border border-zinc-700 text-zinc-300 rounded hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors"
-                    >
-                      EXECUTE
-                    </button>
+                  {/* Columna 2: Precio */}
+                  <div className={`text-xs font-mono tabular-nums whitespace-nowrap ${
+                    cost === "FREE" ? "text-zinc-500" : "text-emerald-400"
+                  }`}>
+                    {cost === "FREE" ? "FREE" : `${cost} Ξ`}
                   </div>
+                  
+                  {/* Columna 3: Botón */}
+                  <button
+                    onClick={() => {
+                      onAction(action, {
+                        device_id: device.id,
+                        device_name: device.id.replace(/-/g, "_"),
+                      });
+                    }}
+                    className="px-3 py-1 text-[10px] font-mono border border-zinc-700 text-zinc-300 rounded hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors whitespace-nowrap"
+                  >
+                    {buttonText}
+                  </button>
                 </div>
               );
             })}

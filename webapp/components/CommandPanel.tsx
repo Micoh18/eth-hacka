@@ -78,15 +78,30 @@ export function CommandPanel({ onExecute, chatMessage, history, disabled }: Comm
           </div>
         )}
 
-        {/* Empty State */}
+        {/* System Heartbeat - Shows when idle */}
         {!chatMessage && history.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="text-zinc-600 font-mono text-sm mb-2">
-                No activity
+          <div className="space-y-2">
+            <div className="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-3">
+              System Status
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="text-zinc-600">[SYSTEM]</span>
+                <span className="text-zinc-400">Monitoring devices...</span>
               </div>
-              <div className="text-zinc-700 text-xs">
-                Enter a command below to start
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="text-zinc-600">[NETWORK]</span>
+                <span className="text-zinc-400">Ethereum Sepolia</span>
+                <span className="text-zinc-600">|</span>
+                <span className="text-zinc-500">Gas: ~12 gwei</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="text-zinc-600">[DEVICES]</span>
+                <span className="text-zinc-400">4 devices online</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="text-zinc-600">[READY]</span>
+                <span className="text-success">Agent operational</span>
               </div>
             </div>
           </div>

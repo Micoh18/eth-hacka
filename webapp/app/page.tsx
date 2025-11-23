@@ -13,6 +13,7 @@ import { useTask } from "@/hooks/useTask";
 import { useAutonomousMode } from "@/hooks/useAutonomousMode";
 import { executeAgentPayment, getAgentAddress } from "@/lib/agent-payment";
 import { Lock, Printer, Zap } from "lucide-react";
+import Image from "next/image";
 import {
   discoverMachines,
   discoverMachineCapabilities,
@@ -597,6 +598,16 @@ export default function Home() {
             <span className="text-xs font-mono text-zinc-400 uppercase tracking-wider">
               System: ONLINE
             </span>
+            {/* Logo with rounded frame */}
+            <div className="ml-2 w-8 h-8 rounded-full border-2 border-zinc-700 overflow-hidden bg-zinc-900 flex items-center justify-center">
+              <Image
+                src="/principal logo.png"
+                alt="ChainMachina Logo"
+                width={32}
+                height={32}
+                className="object-contain"
+              />
+            </div>
           </div>
         </div>
         

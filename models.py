@@ -167,8 +167,8 @@ class Printer3D(DeviceSimulator):
 
 class SmartLock(DeviceSimulator):
     def __init__(self):
-        super().__init__("smart-lock-01", "Puerta Principal - Sala 402", "smart_lock", "smartlock.eth")
-        self.location = "Puerta Principal - Sala 402"
+        super().__init__("smart-lock-01", "Main Door - Room 402", "smart_lock", "smartlock.eth")
+        self.location = "Main Door - Room 402"
         self.model = "August Wi-Fi Smart Lock Gen 4"
         
         # Dynamic state
@@ -204,7 +204,7 @@ class SmartLock(DeviceSimulator):
 
 class VendingMachine(DeviceSimulator):
     def __init__(self):
-        super().__init__("vending-machine-01", "Dispensador Hall", "vending_machine", "vendingmachine.eth")
+        super().__init__("vending-machine-01", "Hall Dispenser", "vending_machine", "vendingmachine.eth")
         self.slots = 6
         self.products = ["Coke", "Water", "Snack"]
         
@@ -240,7 +240,7 @@ class VendingMachine(DeviceSimulator):
 
 class SecurityCamera(DeviceSimulator):
     def __init__(self):
-        super().__init__("camera-01", "Cámara Pasillo", "security_camera", "camera.eth")
+        super().__init__("camera-01", "Hall Camera", "security_camera", "camera.eth")
         self.resolution = "1080p"
         self.codec = "H.264"
         

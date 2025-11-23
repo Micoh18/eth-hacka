@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "Command Center - IoT Agent",
   description: "Action-oriented interface for IoT device agents",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

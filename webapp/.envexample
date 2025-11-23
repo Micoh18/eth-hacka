@@ -1,0 +1,25 @@
+
+ANTHROPIC_API_KEY=sk...
+ANTHROPIC_MODEL=claude-3-5-haiku-20241022
+
+vendor credentials
+VENDOR_ADDRESS=0x...
+VENDOR_PRIVATE_KEY=0x...
+
+buyer credentials
+NEXT_PUBLIC_AGENT_ADDRESS=0x....
+NEXT_PUBLIC_AGENT_PRIVATE_KEY=0x...
+
+where api lives, this is basically the domain that the docker gets up
+NEXT_PUBLIC_MACHINE_API_URL=http://localhost:8000
+
+NEXT_PUBLIC_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+
+MAX_AUTO_PAY_AMOUNT=0.05
+
+# Configuración del Dominio (Ngrok manual)
+DOMAIN_URL=https://...
+
+
+# Configuración de Red (Opcional por ahora, pero útil para después)
+RPC_URL=https://ethereum-sepolia-rpc.publicnode.com

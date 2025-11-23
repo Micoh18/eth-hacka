@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Loader2, AlertCircle, CreditCard, ArrowRight } from "lucide-react";
+import Image from "next/image";
 import type { ActivityStep } from "@/types";
 
 interface ActivityLogProps {
@@ -64,7 +65,19 @@ export function ActivityLog({ steps, onSignTransaction, isAutoSigning }: Activit
               
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col">
-                  <span className="text-zinc-300 font-medium">{step.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-300 font-medium">{step.label}</span>
+                    {/* Show ENS logo when resolving ENS */}
+                    {step.label === "ENS_RESOLVER" && (
+                      <Image
+                        src="/ethereum-name-service-ens-logo.svg"
+                        alt="ENS"
+                        width={16}
+                        height={16}
+                        className="opacity-70"
+                      />
+                    )}
+                  </div>
                   <span className="text-zinc-500 mt-0.5">{step.message}</span>
                   
                   {step.details && (

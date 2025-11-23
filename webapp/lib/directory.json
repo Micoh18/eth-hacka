@@ -1,23 +1,23 @@
 [
   {
     "id": "printer",
-    "name": "Impresora 3D Lab",
+    "name": "3D Printer Lab",
     "ens": "3dprinter.eth",
     "icon": "Printer",
-    "description": "Impresión de prototipos plásticos"
+    "description": "Plastic prototype printing"
   },
   {
     "id": "charger",
     "name": "Tesla Supercharger",
     "ens": "evcharger.eth",
     "icon": "Zap",
-    "description": "Carga rápida nivel 3"
+    "description": "Level 3 fast charging"
   },
   {
     "id": "lock",
-    "name": "Puerta Principal",
+    "name": "Main Door",
     "ens": "smartlock.eth",
     "icon": "Lock",
-    "description": "Acceso a Sala 402"
+    "description": "Access to Room 402"
   }
 ]

@@ -129,7 +129,7 @@ async function parseWithOpenAI(text: string, apiKey: string) {
           {
             role: "system",
             content:
-              `You are an intelligent assistant for an IoT device control system. Determine if the user's message is an executable action or a conversation.
+              `You are an intelligent assistant for an IoT device control system. Determine if the user's message is an executable action or a conversation. IMPORTANT: Always respond in English, never in Spanish or any other language.
 
 AVAILABLE DEVICES (4 total):
 1. smart_lock - Actions: unlock (0.001 ETH), lock (free)
@@ -137,8 +137,11 @@ AVAILABLE DEVICES (4 total):
 3. ev_charger - Actions: charge (0.005 ETH), stop (free)
 4. vending_machine - Actions: dispense (0.003 ETH), restock (0.004 ETH), check_inventory (free)
 
+BE FLEXIBLE: Understand natural language commands like "I want to print", "I need to charge", "Open the door", "Give me a drink" - these are all valid actions.
+Map natural language to actions: "I want to print" → print, "I need to charge" → charge, "open" → unlock, "give me" → dispense, "restock" → restock
+
 If ACTION: Return { "type": "action", "action": string, "device": string (optional), "params": object (optional) }
-If CONVERSATION: Return { "type": "chat", "message": string } with a helpful response in Spanish. Guide users about available devices and actions.`,
+If CONVERSATION: Return { "type": "chat", "message": string } with a helpful response in English ONLY. Never respond in Spanish or any other language. Guide users about available devices and actions.`,
           },
           {
             role: "user",
@@ -182,31 +185,34 @@ async function parseWithAnthropic(text: string, apiKey: string) {
       body: JSON.stringify({
         model: process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022",
         max_tokens: 1024,
-        system: `You are an intelligent assistant for an IoT device control system called 'Command Center'. Your job is to determine if the user's message is an executable action or a conversational message.
+        system: `You are an intelligent assistant for an IoT device control system called 'Command Center'. Your job is to determine if the user's message is an executable action or a conversational message. IMPORTANT: Always respond in English, never in Spanish or any other language.
 
 AVAILABLE DEVICES (4 total):
 1. smart_lock - Smart lock devices (e.g., "smart_lock_01")
    - Actions: unlock (0.001 ETH), lock (free), check_access_log (free)
-   - Example: "Desbloquear smart lock", "Unlock door"
+   - Example: "Unlock door", "Open the door", "I need to enter", "Lock the door"
 
 2. 3d_printer - 3D printer devices (e.g., "printer_3d_01")
    - Actions: print (0.002 ETH), buy_filament (0.003 ETH), pause (free), cancel (free)
-   - Example: "Imprimir documento", "Print on Lab 3", "Comprar filamento PLA"
+   - Example: "Print document", "Print on Lab 3", "Buy filament PLA", "I want to print something", "I need ink"
 
 3. ev_charger - EV charging stations (e.g., "ev_station_01")
    - Actions: charge (0.005 ETH), stop (free), check_availability (free)
-   - Example: "Cargar vehículo", "Charge at station 1", "Stop charging"
+   - Example: "Charge vehicle", "Charge at station 1", "Stop charging", "I need to charge my car", "Finish charging"
 
 4. vending_machine - Vending machines (e.g., "vending_machine_01")
    - Actions: dispense (0.003 ETH), restock (0.004 ETH), check_inventory (free)
-   - Example: "Dispensar producto", "Dispense from vending machine", "Restock slot 5"
+   - Example: "Dispense product", "Dispense from vending machine", "Restock slot 5", "Give me a drink", "Restock products"
 
 INSTRUCTIONS:
+- Be FLEXIBLE with natural language. Users may say things like "I want to print", "I need to charge", "Open the door", "Give me a drink" - these are all valid actions.
+- Extract the intent even if the command is informal or incomplete.
 - If it's an ACTION: Return JSON with type 'action': { "type": "action", "action": string, "device": string (optional), "params": object (optional) }
-- If it's a CONVERSATION: Return JSON with type 'chat' and provide a helpful, natural response in Spanish. Be friendly and guide users about available devices and actions.
+- If it's a CONVERSATION: Return JSON with type 'chat' and provide a helpful, natural response in English ONLY. Never respond in Spanish or any other language. Be friendly and guide users about available devices and actions.
 - When users ask about capabilities, list all 4 devices and their actions.
 - When users greet you, greet them back and offer to help with device actions.
 - Actions can be: unlock, lock, print, buy_filament, pause, cancel, charge, stop, dispense, restock, check_inventory, check_availability, check_access_log
+- Map natural language to actions: "I want to print" → print, "I need to charge" → charge, "open" → unlock, "give me" → dispense, "restock" → restock
 - Return ONLY valid JSON, no additional text.`,
         messages: [
           {
@@ -221,7 +227,7 @@ INSTRUCTIONS:
 - restock (vending_machine): Restock products in a vending machine
 - check_inventory (vending_machine): Check available products
 
-If it's an action, return: { "type": "action", "action": "unlock" | "print" | "charge" | "dispense" | "restock" | etc., "device": "device-id-or-name" (optional), "params": {} (optional) }\n\nIf it's a conversation (greeting, question about capabilities, general chat), return: { "type": "chat", "message": "your helpful, natural response in Spanish here. If they ask about capabilities, mention all 4 devices and their main actions." }`,
+If it's an action, return: { "type": "action", "action": "unlock" | "print" | "charge" | "dispense" | "restock" | etc., "device": "device-id-or-name" (optional), "params": {} (optional) }\n\nIf it's a conversation (greeting, question about capabilities, general chat), return: { "type": "chat", "message": "your helpful, natural response in English ONLY here. Never use Spanish or any other language. If they ask about capabilities, mention all 4 devices and their main actions." }`,
           },
         ],
       }),
@@ -260,7 +266,7 @@ function parseWithRegex(text: string) {
   if (isClearConversation) {
     const result = {
       type: "chat" as const,
-      message: "Hola! Puedo ayudarte a ejecutar acciones en dispositivos IoT. Tenemos 4 dispositivos disponibles:\n\n1. **Smart Lock** - Desbloquear/Bloquear (0.001 ETH)\n2. **3D Printer** - Imprimir documentos, comprar filamento (0.002-0.003 ETH)\n3. **EV Charger** - Cargar vehículos (0.005 ETH)\n4. **Vending Machine** - Dispensar productos, reabastecer (0.003-0.004 ETH)\n\nEjemplos: 'Desbloquear smart lock', 'Imprimir documento', 'Cargar vehículo', 'Dispensar producto'. ¿En qué puedo ayudarte?",
+      message: "Hello! I can help you execute actions on IoT devices. We have 4 devices available:\n\n1. **Smart Lock** - Unlock/Lock (0.001 ETH)\n2. **3D Printer** - Print documents, buy filament (0.002-0.003 ETH)\n3. **EV Charger** - Charge vehicles (0.005 ETH)\n4. **Vending Machine** - Dispense products, restock (0.003-0.004 ETH)\n\nExamples: 'Unlock smart lock', 'Print document', 'Charge vehicle', 'Dispense product'. How can I help you?",
       confidence: 0.9, // High confidence for clear conversations
     };
     console.log("[API] parseWithRegex - Detected clear conversation, result:", result);
@@ -272,18 +278,18 @@ function parseWithRegex(text: string) {
   let device: string | undefined;
   let confidence = 0.5; // Low confidence by default
 
-  // Check for action keywords with high confidence patterns
+  // Check for action keywords with high confidence patterns (including natural language)
   const actionPatterns = [
-    { keywords: ["unlock", "desbloquear", "abrir"], action: "unlock", confidence: 0.9 },
-    { keywords: ["lock", "bloquear", "cerrar"], action: "lock", confidence: 0.9 },
-    { keywords: ["print", "imprimir"], action: "print", confidence: 0.9 },
-    { keywords: ["charge", "cargar"], action: "charge", confidence: 0.9 },
-    { keywords: ["stop", "detener", "parar"], action: "stop", confidence: 0.9 },
-    { keywords: ["dispense", "dispensar", "sacar"], action: "dispense", confidence: 0.9 },
-    { keywords: ["restock", "reabastecer", "reponer"], action: "restock", confidence: 0.9 },
-    { keywords: ["buy", "comprar", "purchase"], action: "buy_filament", confidence: 0.8 },
-    { keywords: ["pause", "pausar"], action: "pause", confidence: 0.9 },
-    { keywords: ["cancel", "cancelar"], action: "cancel", confidence: 0.9 },
+    { keywords: ["unlock", "desbloquear", "abrir", "abre", "necesito entrar", "quiero entrar"], action: "unlock", confidence: 0.9 },
+    { keywords: ["lock", "bloquear", "cerrar", "cierra"], action: "lock", confidence: 0.9 },
+    { keywords: ["print", "imprimir", "quiero imprimir", "necesito imprimir", "imprime"], action: "print", confidence: 0.9 },
+    { keywords: ["charge", "cargar", "necesito cargar", "quiero cargar", "carga"], action: "charge", confidence: 0.9 },
+    { keywords: ["stop", "detener", "parar", "termina", "detén"], action: "stop", confidence: 0.9 },
+    { keywords: ["dispense", "dispensar", "sacar", "dame", "quiero", "necesito una"], action: "dispense", confidence: 0.85 },
+    { keywords: ["restock", "reabastecer", "reponer", "reponer productos"], action: "restock", confidence: 0.9 },
+    { keywords: ["buy", "comprar", "purchase", "necesito tinta", "necesito filamento", "comprar tinta"], action: "buy_filament", confidence: 0.8 },
+    { keywords: ["pause", "pausar", "pausa"], action: "pause", confidence: 0.9 },
+    { keywords: ["cancel", "cancelar", "cancela"], action: "cancel", confidence: 0.9 },
   ];
 
   for (const pattern of actionPatterns) {
@@ -298,7 +304,7 @@ function parseWithRegex(text: string) {
   if (!action) {
     const result = {
       type: "chat" as const,
-      message: "No entendí tu mensaje. ¿Podrías ser más específico? Tenemos 4 dispositivos disponibles:\n\n• **Smart Lock**: Desbloquear/Bloquear\n• **3D Printer**: Imprimir, Comprar filamento, Pausar/Cancelar\n• **EV Charger**: Cargar vehículo, Detener carga\n• **Vending Machine**: Dispensar producto, Reabastecer\n\nEjemplos: 'Desbloquear smart lock', 'Imprimir documento', 'Cargar vehículo', 'Dispensar producto'.",
+      message: "I didn't understand your message. Could you be more specific? We have 4 devices available:\n\n• **Smart Lock**: Unlock/Lock\n• **3D Printer**: Print, Buy filament, Pause/Cancel\n• **EV Charger**: Charge vehicle, Stop charging\n• **Vending Machine**: Dispense product, Restock\n\nExamples: 'Unlock smart lock', 'Print document', 'Charge vehicle', 'Dispense product'.",
       confidence: 0.3, // Low confidence - should trigger AI parsing
     };
     console.log("[API] parseWithRegex - No clear action detected, low confidence, result:", result);

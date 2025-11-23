@@ -106,7 +106,7 @@ export function DeviceControlGrid({ activeDeviceId, onDeviceAction }: DeviceCont
         <p className="text-xs text-zinc-500">Real-time telemetry and control</p>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {devices.map((device) => (
           <DeviceCard
             key={device.id}
