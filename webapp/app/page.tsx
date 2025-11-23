@@ -6,6 +6,7 @@ import { parseEther } from "viem";
 import { CommandInput } from "@/components/CommandInput";
 import { TaskStage } from "@/components/TaskStage";
 import { Sidebar } from "@/components/Sidebar";
+import { WalletButton } from "@/components/WalletButton";
 import { useTask } from "@/hooks/useTask";
 import {
   discoverMachines,
@@ -95,43 +96,57 @@ export default function Home() {
       startTask(command);
 
       // Step 1: Parse intent
+      console.log("[Page] handleExecute - Step 1: Parsing intent for:", command);
       const parseResponse = await fetch("/api/agent/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: command }),
       });
 
+      console.log("[Page] handleExecute - Parse response status:", parseResponse.status);
+
       if (!parseResponse.ok) {
-        throw new Error("Failed to parse intent");
+        const errorText = await parseResponse.text();
+        console.error("[Page] handleExecute - Parse failed:", errorText);
+        throw new Error(`Failed to parse intent: ${parseResponse.status} ${errorText}`);
       }
 
       const parsedIntent = await parseResponse.json();
+      console.log("[Page] handleExecute - Parsed intent:", parsedIntent);
       setParsedIntent(parsedIntent);
 
       // Step 2: Discover machines
+      console.log("[Page] handleExecute - Step 2: Discovering machines");
       const machines = await discoverMachines();
+      console.log("[Page] handleExecute - Found machines:", machines.length);
       if (machines.length === 0) {
         throw new Error("No machines found");
       }
 
       // For now, use first machine (can be enhanced with matching logic)
       const machine = machines[0];
+      console.log("[Page] handleExecute - Using machine:", machine.url);
       setMachine(machine);
 
       // Step 3: Discover capabilities
+      console.log("[Page] handleExecute - Step 3: Discovering capabilities");
       const manifest = await discoverMachineCapabilities(machine.url);
+      console.log("[Page] handleExecute - Manifest received:", manifest);
       const capability = await findMatchingCapability(manifest, parsedIntent);
+      console.log("[Page] handleExecute - Matching capability:", capability);
       if (!capability) {
         throw new Error("No matching capability found");
       }
       setCapability(capability);
 
       // Step 4: Find device
+      console.log("[Page] handleExecute - Step 4: Finding device");
       const device = await findDevice(
         machine.url,
         parsedIntent.device,
         parsedIntent.device
       );
+      console.log("[Page] handleExecute - Found device:", device);
       if (!device) {
         throw new Error("Device not found");
       }
@@ -164,75 +179,86 @@ export default function Home() {
         showQuote(result.paymentDetails);
       }
     } catch (error: any) {
+      console.error("[Page] handleExecute - Error:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       setError(error.message || "Task execution failed");
     }
   };
 
+  const quickActions = [
+    { icon: "🔓", label: "Desbloquear dispositivo", command: "Desbloquear smart lock" },
+    { icon: "🖨️", label: "Imprimir documento", command: "Imprimir en Lab 3" },
+    { icon: "🔌", label: "Cargar vehículo", command: "Cargar en estación 1" },
+  ];
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        history={history}
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-      />
+    <div className="min-h-screen bg-[#030303] text-white selection:bg-indigo-500/30 overflow-hidden">
+      {/* Breathing Void - Luz ambiental */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px] opacity-50 animate-pulse" 
+             style={{ animationDuration: '4s' }} />
+        <div className="absolute top-1/4 right-1/4 w-[300px] h-[300px] bg-purple-600/10 rounded-full blur-[100px] opacity-30" />
+      </div>
 
-      <main className="flex-1 flex flex-col lg:ml-80">
-        {/* Header */}
-        <header className="p-4 border-b border-gray-200 dark:border-gray-800 lg:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
-        </header>
-
-        {/* Main Content */}
-        <div className="flex-1 flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-950">
-          {state === "idle" ? (
-            <div className="text-center">
-              <h1 className="text-4xl font-semibold text-gray-900 dark:text-white mb-4">
-                Command Center
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mb-8">
-                Describe una tarea para comenzar
-              </p>
-            </div>
-          ) : (
-            <TaskStage state={state} taskData={taskData} />
-          )}
-        </div>
-
-        {/* Command Input */}
-        <CommandInput
-          onExecute={handleExecute}
-          disabled={state !== "idle" && state !== "success" && state !== "error"}
+      {/* Content */}
+      <div className="relative z-10 flex h-screen">
+        <Sidebar
+          history={history}
+          isOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          walletButton={<WalletButton />}
         />
-        
-        {/* Reset button after success/error */}
-        {(state === "success" || state === "error") && (
-          <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-30">
-            <button
-              onClick={reset}
-              className="px-6 py-2 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
-            >
-              Nueva Tarea
-            </button>
+
+        <main className="flex-1 flex flex-col lg:ml-20 xl:ml-20">
+          {/* Main Content */}
+          <div className="flex-1 flex items-center justify-center p-8">
+            {state === "idle" ? (
+              <div className="w-full max-w-3xl">
+                {/* Quick Actions */}
+                <div className="flex flex-wrap gap-3 justify-center mb-12">
+                  {quickActions.map((action, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleExecute(action.command)}
+                      disabled={!isConnected}
+                      className="group relative px-4 py-2.5 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl hover:bg-white/10 hover:border-indigo-500/50 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <span className="text-lg mr-2">{action.icon}</span>
+                      <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
+                        {action.label}
+                      </span>
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-500/10 group-hover:to-purple-500/10 transition-all duration-300" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <TaskStage state={state} taskData={taskData} />
+            )}
           </div>
-        )}
-      </main>
+
+          {/* Command Input - God Bar */}
+          <CommandInput
+            onExecute={handleExecute}
+            disabled={state !== "idle" && state !== "success" && state !== "error"}
+          />
+          
+          {/* Reset button after success/error */}
+          {(state === "success" || state === "error") && (
+            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-30">
+              <button
+                onClick={reset}
+                className="px-5 py-2.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl hover:bg-white/20 hover:border-indigo-500/50 transition-all text-sm font-medium text-zinc-300 hover:text-white"
+              >
+                Nueva Tarea
+              </button>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

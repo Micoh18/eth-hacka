@@ -12,13 +12,37 @@ export const apiClient: AxiosInstance = axios.create({
 });
 
 export async function getManifest(machineUrl: string) {
-  const response = await apiClient.get(`${machineUrl}/ai-manifest`);
-  return response.data;
+  console.log("[API Client] getManifest - Calling:", `${machineUrl}/ai-manifest`);
+  try {
+    const response = await apiClient.get(`${machineUrl}/ai-manifest`);
+    console.log("[API Client] getManifest - Success:", response.status);
+    return response.data;
+  } catch (error: any) {
+    console.error("[API Client] getManifest - Error:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: `${machineUrl}/ai-manifest`
+    });
+    throw error;
+  }
 }
 
 export async function getDevices(machineUrl: string) {
-  const response = await apiClient.get(`${machineUrl}/status`);
-  return response.data;
+  console.log("[API Client] getDevices - Calling:", `${machineUrl}/status`);
+  try {
+    const response = await apiClient.get(`${machineUrl}/status`);
+    console.log("[API Client] getDevices - Success:", response.status, `(${response.data?.length || 0} devices)`);
+    return response.data;
+  } catch (error: any) {
+    console.error("[API Client] getDevices - Error:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: `${machineUrl}/status`
+    });
+    throw error;
+  }
 }
 
 export async function executeAction(
@@ -30,6 +54,13 @@ export async function executeAction(
 ) {
   const url = endpoint.replace(/{device_id}/g, params.device_id || "");
   const fullUrl = `${machineUrl}${url}`;
+  
+  console.log("[API Client] executeAction - Calling:", {
+    method: method.toLowerCase(),
+    url: fullUrl,
+    params,
+    hasTxHash: !!txHash
+  });
 
   const config: any = {
     method: method.toLowerCase(),
@@ -44,7 +75,21 @@ export async function executeAction(
     };
   }
 
-  const response = await apiClient(config);
-  return response;
+  try {
+    const response = await apiClient(config);
+    console.log("[API Client] executeAction - Response:", {
+      status: response.status,
+      data: response.data
+    });
+    return response;
+  } catch (error: any) {
+    console.error("[API Client] executeAction - Error:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: fullUrl
+    });
+    throw error;
+  }
 }
 

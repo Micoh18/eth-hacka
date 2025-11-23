@@ -33,3 +33,13 @@ body {
   }
 }
 
+/* Animación personalizada para el pulso lento */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+

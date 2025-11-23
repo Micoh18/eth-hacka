@@ -18,23 +18,24 @@ const WALLET_KEY = process.env.WALLET_KEY;
 const MAX_AUTO_PAY_AMOUNT = parseFloat(process.env.MAX_AUTO_PAY_AMOUNT || '0.05');
 const RPC_URL = process.env.RPC_URL || 'https://sepolia.base.org';
 
-if (!WALLET_KEY) {
-  console.error('❌ Missing WALLET_KEY environment variable');
-  process.exit(1);
+// Setup wallet (only if WALLET_KEY is provided)
+let account = null;
+let walletClient = null;
+let publicClient = null;
+
+if (WALLET_KEY) {
+  account = privateKeyToAccount(WALLET_KEY);
+  walletClient = createWalletClient({
+    account,
+    chain: baseSepolia,
+    transport: http(RPC_URL),
+  });
+
+  publicClient = createPublicClient({
+    chain: baseSepolia,
+    transport: http(RPC_URL),
+  });
 }
-
-// Setup wallet
-const account = privateKeyToAccount(WALLET_KEY);
-const walletClient = createWalletClient({
-  account,
-  chain: baseSepolia,
-  transport: http(RPC_URL),
-});
-
-const publicClient = createPublicClient({
-  chain: baseSepolia,
-  transport: http(RPC_URL),
-});
 
 /**
  * Step 1: Service Discovery - Get machine capabilities
@@ -87,6 +88,11 @@ async function executeWithPayment(capability, params = {}) {
       console.log(`\n💰 Payment Required: ${amount} ${paymentDetails.token}`);
       console.log(`   Recipient: ${paymentDetails.recipient}`);
       console.log(`   Chain: ${paymentDetails.chainName}`);
+      
+      // Check if wallet is configured
+      if (!walletClient || !publicClient || !account) {
+        throw new Error('Wallet not configured. WALLET_KEY environment variable is required for automatic payments.');
+      }
       
       // Check if amount is within auto-pay limit
       if (amount > MAX_AUTO_PAY_AMOUNT) {
@@ -156,6 +162,13 @@ async function executeWithPayment(capability, params = {}) {
  * Main function: Discover and use machine
  */
 async function main() {
+  // Check if wallet is configured
+  if (!WALLET_KEY || !account || !walletClient || !publicClient) {
+    console.error('❌ Missing WALLET_KEY environment variable');
+    console.error('   Please set WALLET_KEY in your .env file to use the agent assistant');
+    process.exit(1);
+  }
+
   console.log('🤖 Agent Assistant Starting...\n');
   console.log(`📡 Machine API: ${MACHINE_API_URL}`);
   console.log(`💰 Max auto-pay: ${MAX_AUTO_PAY_AMOUNT} ETH`);
@@ -216,8 +229,13 @@ async function main() {
   }
 }
 
-// Run main function
-main();
+// Don't run main automatically - only run when explicitly called
+// This allows the script to be used as a module without auto-executing
 
-export { discoverMachineCapabilities, executeWithPayment };
+// To run manually, use: node index.js --run
+if (process.argv.includes('--run')) {
+  main();
+}
+
+export { discoverMachineCapabilities, executeWithPayment, main };
 

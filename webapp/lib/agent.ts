@@ -58,69 +58,92 @@ export async function findDevice(
   return devices[0] || null;
 }
 
+/**
+ * Execute action using the Agent Assistant API
+ * This uses the integrated agent-assistant logic instead of calling the API directly
+ * 
+ * Note: Payment is handled by the client (browser) after receiving payment details
+ */
 export async function executeWithPayment(
   machineUrl: string,
   capability: Capability,
   params: Record<string, any>,
-  sendTransaction: (to: string, value: bigint) => Promise<`0x${string}`>,
-  waitForTransaction: (hash: `0x${string}`) => Promise<void>
+  sendTransaction?: (to: string, value: bigint) => Promise<`0x${string}`>,
+  waitForTransaction?: (hash: `0x${string}`) => Promise<void>
 ): Promise<{ success: boolean; data?: any; paymentDetails?: PaymentDetails }> {
+  console.log("[Agent] executeWithPayment - Using Agent Assistant API");
+  
   try {
-    // First attempt (will get 402)
-    const response = await executeAction(
-      machineUrl,
-      capability.endpoint,
-      capability.method,
-      params
-    );
+    // Call the Agent Assistant API route
+    const response = await fetch("/api/agent/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        machineUrl,
+        capability,
+        params,
+      }),
+    });
 
-    if (response.status === 200) {
-      return { success: true, data: response.data };
+    const result = await response.json();
+
+    // Success without payment
+    if (response.ok && result.success) {
+      console.log("[Agent] executeWithPayment - Action completed (no payment)");
+      return { success: true, data: result.data };
     }
 
-    // Handle 402 Payment Required
-    if (response.status === 402) {
-      const paymentDetails: PaymentDetails =
-        response.data.detail.paymentDetails;
-
+    // Payment required (402)
+    if (response.status === 402 && result.requiresPayment) {
+      console.log("[Agent] executeWithPayment - Payment required");
       return {
         success: false,
-        paymentDetails,
+        paymentDetails: result.paymentDetails,
       };
     }
 
-    throw new Error(`Unexpected status: ${response.status}`);
+    // Error
+    throw new Error(result.error || `Unexpected response: ${response.status}`);
   } catch (error: any) {
-    if (error.response?.status === 402) {
-      const paymentDetails: PaymentDetails =
-        error.response.data.detail.paymentDetails;
-      return {
-        success: false,
-        paymentDetails,
-      };
-    }
+    console.error("[Agent] executeWithPayment - Error:", error.message);
     throw error;
   }
 }
 
+/**
+ * Retry action with payment proof using Agent Assistant API
+ */
 export async function retryWithPaymentProof(
   machineUrl: string,
   capability: Capability,
   params: Record<string, any>,
   txHash: string
 ): Promise<any> {
-  const response = await executeAction(
-    machineUrl,
-    capability.endpoint,
-    capability.method,
-    params,
-    txHash
-  );
+  console.log("[Agent] retryWithPaymentProof - Using Agent Assistant API");
+  
+  try {
+    const response = await fetch("/api/agent/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        machineUrl,
+        capability,
+        params,
+        txHash,
+      }),
+    });
 
-  if (response.status !== 200) {
-    throw new Error(`Action failed after payment: ${response.status}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Action failed after payment: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("[Agent] retryWithPaymentProof - Action completed successfully");
+    return result.data;
+  } catch (error: any) {
+    console.error("[Agent] retryWithPaymentProof - Error:", error.message);
+    throw error;
   }
-
-  return response.data;
 }
 

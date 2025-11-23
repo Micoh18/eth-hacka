@@ -8,13 +8,15 @@ Sistema de agentes para controlar dispositivos IoT usando el protocolo **x402 Pa
 # Terminal 1: Iniciar API IoT
 uvicorn main:app --reload --port 8000
 
-# Terminal 2: Agent Assistant
-cd agent-assistant
+# Terminal 2: Webapp (incluye Agent Assistant integrado)
+cd webapp
 npm install
-# Crear .env con:
-# WALLET_KEY=0x16ce06506611e54a20f0f07ae00527c7643b1d6792ad7c33e91a3435a709483f
-npm start
+npm run dev
 ```
+
+El Agent Assistant ahora está **integrado en la webapp** y se activa automáticamente cuando el usuario ejecuta una tarea desde la interfaz. Ya no necesitas ejecutar el agent-assistant por separado.
+
+> **Nota**: Si quieres usar el agent-assistant como script independiente (para pruebas), aún puedes hacerlo desde `agent-assistant/`.
 
 ## 🏗️ Arquitectura
 
@@ -48,7 +50,16 @@ npm start
 ├── main.py                    # API IoT (FastAPI)
 ├── models.py                  # Modelos de dispositivos
 ├── blockchain_verifier.py    # Verificación on-chain
-├── agent-assistant/          # Agente Cliente
+├── webapp/                    # Webapp Next.js (incluye Agent Assistant integrado)
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── agent/
+│   │   │       ├── parse/     # API para parsear intents
+│   │   │       └── execute/  # API del Agent Assistant
+│   │   └── page.tsx          # Interfaz principal
+│   └── lib/
+│       └── agent.ts          # Funciones del agente
+├── agent-assistant/           # Agente Cliente (script independiente, opcional)
 │   ├── index.js
 │   └── package.json
 └── requirements.txt
@@ -104,12 +115,31 @@ Obtiene el estado detallado de un dispositivo específico.
 
 ## 🧪 Probar el Sistema
 
-### Opción 1: Usar el Agent Assistant
+### Opción 1: Usar la Webapp (Recomendado)
+
+```bash
+cd webapp
+npm run dev
+```
+
+Abre `http://localhost:3000` en tu navegador y:
+1. Conecta tu wallet
+2. Escribe un comando (ej: "Desbloquear smart lock")
+3. El Agent Assistant se activará automáticamente
+4. Si se requiere pago, se mostrará un diálogo
+5. Aprueba el pago desde tu wallet
+6. La acción se ejecutará automáticamente
+
+### Opción 2: Usar el Agent Assistant como Script (Solo para pruebas)
 
 ```bash
 cd agent-assistant
-npm start
+npm install
+# Crear .env con WALLET_KEY
+npm start  # o npm run dev para modo watch
 ```
+
+> **Nota**: El agent-assistant ahora solo se ejecuta cuando se llama explícitamente con `npm start` o `npm run dev`. No se ejecuta automáticamente al importar el módulo.
 
 El agente automáticamente:
 1. Descubrirá las capacidades
